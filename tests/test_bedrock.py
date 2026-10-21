@@ -56,3 +56,24 @@ def test_a_deep_sharp_contact_is_found_despite_a_shallow_prior():
     out = bedrock.invert_line(ld, bedrock.make_prior(STATS, settings), settings, seed=0)
     assert np.all(out["depth_q10"] <= depth) and np.all(out["depth_q90"] >= depth)
     assert np.all(np.abs(out["depth_q50"] / depth - 1) < 0.25)
+
+
+def test_conformal_factor_and_widening():
+    # scores 0.1 ... 1.9; with 9 holes the 80% factor is the ceil(10 * 0.8) = 8th smallest
+    scores = np.linspace(0.1, 1.9, 9)
+    assert bedrock.inflation(scores) == scores[7]
+    assert bedrock.inflation(scores[:3]) == np.inf  # too few holes to promise 80%
+    lo, hi = bedrock.widen(np.array([5.0]), np.array([10.0]), np.array([40.0]), 2.0)
+    np.testing.assert_allclose([lo[0], hi[0]], [2.5, 160.0])
+
+
+def test_conformity_is_one_on_the_interval_edge():
+    import pandas as pd
+
+    holes = pd.DataFrame({
+        "bedrock_depth_m": [5.0, 40.0, 10.0, 0.0],
+        "depth_q10": [5.0, 5.0, 5.0, 2.0], "depth_q50": [10.0] * 3 + [4.0],
+        "depth_q90": [40.0] * 3 + [8.0],
+    })  # fmt: skip
+    # the last hole has bedrock at the surface: it counts as 1 m, the model's shallowest
+    np.testing.assert_allclose(bedrock.conformity(holes), [1.0, 1.0, 0.0, 2.0])

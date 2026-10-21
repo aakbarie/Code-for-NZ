@@ -49,6 +49,7 @@ uv run morrill communities  # group soundings by resistivity profile, write figu
 uv run morrill lithology    # P(coarse / fine / bedrock) in every model cell, with validation
 uv run morrill kalman       # Kalman state-space features along every flight line (~12 min)
 uv run morrill enki         # ensemble Kalman inversion of every line, with checks (~25 min)
+uv run morrill bedrock      # depth to bedrock as a sharp contact, with calibrated intervals (~5 min)
 ```
 
 ## Layout

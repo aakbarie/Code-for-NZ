@@ -636,8 +636,15 @@ def _depth_map(steps, bedrock, path: Path, left_title: str, suptitle: str) -> No
     plt.close(fig)
 
 
-def bedrock_section(steps, smooth_steps, smooth_layers, lay, holes, line, path: Path) -> None:
-    """One line: the sharp contact over the smooth model's resistivity, and both depths."""
+def bedrock_section(
+    steps, smooth_steps, smooth_layers, lay, holes, line, path: Path, k: float | None = None
+) -> None:
+    """One line: the sharp contact over the smooth model's resistivity, and both depths.
+
+    k, if given, widens the 80% band by the split-conformal factor (bedrock.inflation).
+    """
+    from morrill.analysis.bedrock import widen
+
     sel = steps[steps["line"] == line].sort_values("y").reset_index(drop=True)
     sm = smooth_steps[smooth_steps["line"] == line].set_index("sounding_id").loc[sel["sounding_id"]]
     y = sel["y"].to_numpy() / 1000
@@ -667,6 +674,10 @@ def bedrock_section(steps, smooth_steps, smooth_layers, lay, holes, line, path: 
         loc="left",
     )
     ax = axes[1]
+    if k is not None and np.isfinite(k):
+        lo, hi = widen(sel["depth_q10"], sel["depth_q50"], sel["depth_q90"], k)
+        ax.fill_between(y, lo, np.minimum(hi, 150), color=HIGHLIGHT, alpha=0.1, lw=0,
+                        label=f"recalibrated 80% (×{k:.1f})")  # fmt: skip
     ax.fill_between(y, sel["depth_q10"], sel["depth_q90"], color=HIGHLIGHT, alpha=0.25, lw=0,
                     label="sharp contact, 80%")  # fmt: skip
     ax.plot(y, sel["depth_q50"], color=HIGHLIGHT, lw=1.6, label="sharp contact, median")
@@ -675,8 +686,9 @@ def bedrock_section(steps, smooth_steps, smooth_layers, lay, holes, line, path: 
     if len(on):
         ax.scatter(hy, on["bedrock_depth_m"], s=40, color=SURFACE, edgecolors=INK,
                    linewidths=1.2, zorder=4, label="borehole: depth to bedrock")  # fmt: skip
-        for yy, (_, r) in zip(hy, on.iterrows(), strict=True):
-            ax.annotate(r["hole_id"], (yy, r["bedrock_depth_m"]), xytext=(6, 6),
+        for i, (yy, (_, r)) in enumerate(zip(hy, on.iterrows(), strict=True)):
+            # alternate above and below, so neighbouring holes' names don't overlap
+            ax.annotate(r["hole_id"], (yy, r["bedrock_depth_m"]), xytext=(6, 6 if i % 2 else -11),
                         textcoords="offset points", fontsize=6.5, color=INK_2)  # fmt: skip
     ax.set_ylim(125, 0)
     ax.set_ylabel("depth (m)")

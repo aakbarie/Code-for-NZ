@@ -31,9 +31,9 @@ answer, with no statement of how well it is determined. Bayesian
 alternatives answer that question. Trans-dimensional Markov chain Monte Carlo
 (MCMC; Malinverno 2002; Minsley 2011; Minsley et al. 2021) samples models
 whose number of layers is itself unknown, and so describes non-uniqueness
-directly. The price is computation. A single sounding in the North Platte
-River valley took about 200,000 forward-model evaluations and 24 minutes in
-2012 (section 4.6). A survey of 70,000 soundings would need years of
+directly. The price is computation. With the 2012 version of one such code,
+a single test sounding took about 200,000 forward-model evaluations and
+24 minutes (section 4.6). A survey of 70,000 soundings would need years of
 single-core time.
 
 An earlier study of the same survey proposed a hybrid route (Friedel et al.
@@ -218,11 +218,134 @@ A single pass is therefore used.
 
 # 4 Results
 
-RESULTS
+## 4.1 Forward model and survey calibration
+
+**The forward model against an independent inversion.** EM1DFM's resistivity models for the six inverted lines were run through the forward model and compared with the measured data (Table 1). Nine channels agree to within 1–5%, with correlations of 0.989–0.999. Three are off by 10–17%, consistently, whatever the geology: the 378 Hz in-phase, both coaxial channels and the 8,171 Hz in-phase.
+
+**Table 1.** Data predicted from EM1DFM's models by the forward model, against the measured data (six inverted lines). Median ratio and correlation per channel.
+
+| Channel | Predicted / measured | Correlation |
+|---|---|---|
+| 1,776 Hz I, Q | 1.00, 0.98 | 0.999, 0.999 |
+| 378 Hz Q | 1.00 | 0.999 |
+| 8,171 Hz Q; 41 kHz I, Q | 0.98; 0.98, 0.96 | ≥ 0.996 |
+| 129 kHz I, Q | 1.06, 1.03 | 0.995, 0.989 |
+| **378 Hz I** | **0.83** | 0.990 |
+| **coaxial 3,345 Hz I, Q** | **0.87, 0.88** | 0.996 |
+| **8,171 Hz I** | **1.10** | 0.999 |
+
+**The same channels, from a different inversion.** The ensemble inversion, fitted to the uncorrected data on line 30050, misses the same channels in the same direction. One pass of the gain estimate (section 3.4) gives:
+- coaxial in-phase and quadrature: 1.12 and 1.11 (measured high);
+- 8,171 Hz in-phase: 0.90 (measured low);
+- the other nine channels: 0.93–1.03.
+
+When two inversions of different design cannot fit the same channels in the same way, the error lies in the data. The most likely cause is a calibration error on those channels. Applying the gains raised the log marginal likelihood of line 30050 from −20,272 to about −18,900, for the cost of eleven numbers. All results below use the corrected data.
+
+## 4.2 Smooth layered model
+
+**Settings.** Of 27 combinations searched on line 30050, the marginal likelihood chose:
+- $L_h = 3$ km;
+- prior spreads widened by 1.5 (one standard deviation is a factor of 3 in resistivity);
+- $c = 0$, in the seven best combinations: given the airborne data, the deep layers are better left independent of the shallow ones. $L_v$, refitted to the logs with $c = 0$, is 9.1 m.
+
+The scores of the leading settings are close (log marginal likelihoods −18,767, −18,799 and −18,803 for $L_h$ = 3, 6 and 1.5 km). The long correlation length mostly says that soundings 64 m apart tell nearly the same story.
+
+**Run and data fit.** All 12 lines (3,577 soundings) were inverted in 9.9 min on four cores, or 0.67 core-seconds per sounding. The median mean squared normalized residual per sounding is 0.53, and 90% of soundings are below 0.95, so the data are fitted to within the assumed error. The median height correction is −0.2 m; 80% of soundings fall between −2.1 and +1.6 m.
+
+**Against EM1DFM** (six inverted lines, 1,999 soundings):
+- **resistivity:** the two agree to about 0.15 decades (40%) through the top 60 m (median absolute difference 0.14–0.15 decades), and 0.22 decades below. EM1DFM's value lies inside the ensemble's 80% interval for 66–86% of layer values, depending on depth.
+- **depth to conductor:** median absolute difference 2.4 m, with no bias; EM1DFM's value lies inside the 80% interval at 83% of soundings.
+
+**Against the boreholes** (Table 2). Where bedrock is shallow, on the inverted lines, the along-line ensemble is more accurate than EM1DFM (mean absolute error 1.7 m against 2.1 m), and its intervals contain the borehole depth at 9 of 10 holes. Run sounding by sounding from the same prior, the error rises to 2.7 m and coverage falls to 40%. On the four uninverted lines the error is 8.4 m. At the two buried-valley holes it is 21 m: the medians are 42 and 36 m, against 58.5 and 60.3 m in the boreholes, and neither interval reaches the logged depth.
+
+**Table 2.** Depth to conductor (smooth model) against borehole depth to bedrock, at the 21 holes within 100 m of a sounding with data. Mean absolute error of the median, and fraction of holes inside the 80% interval.
+
+| Holes | n | Along the line | Sounding by sounding | EM1DFM |
+|---|---|---|---|---|
+| Inverted lines | 10 | **1.7 m / 90%** | 2.7 m / 40% | 2.1 m |
+| Uninverted lines | 11 | 8.4 m / 27% | 8.7 m / 55% | — |
+| Buried valley (2-J-97, 1-H-97) | 2 | 21 m / 0 of 2 | 23 m / 1 of 2 | — |
+
+**Why the valley floor is too high.** The profiles at the valley holes show the cause (Fig. 1). At 1-H-97 the inversion finds a strong conductor (3.6–7.5 ohm·m) from 63.6 m, the first layer top below the logged shale, so the shale is seen at about the right depth. It also puts 10 ohm·m at 36–42 m, where the driller logged sand and gravel. At 2-J-97 the resistivity falls gradually, to 11–22 ohm·m from 48 m and 3.4 ohm·m from 84 m. The induction log there reads 30–47 ohm·m down to 55 m, and clay begins at 58.5 m. Three things combine:
+1. **The fill is not very resistive.** It logs at 30–80 ohm·m, only a factor of two above the 20 ohm·m threshold.
+2. **The prior is smooth.** A correlated Gaussian cannot make a sharp step; it ramps down to the shale over 10–20 m.
+3. **The rule takes the first layer below 20 ohm·m,** so it fires near the top of the ramp.
+
+**Against the induction logs** (12 holes, 160 layer values), the rank correlation is 0.58, against 0.67 for EM1DFM where it exists. The ensemble reads 0.13 decades (35%) more resistive than the logs, and the log lies inside the 80% interval for 44% of values. That fraction is not a fair test of the interval, which describes the average over a footprint of about 100 m rather than the metre around a borehole. Both inversions read 25–35% more resistive than the logs throughout.
+
+![Fig. 1. Line 30070, smooth model: median resistivity with poorly resolved cells shaded grey; the width of its 80% interval; depth to conductor with its interval and the boreholes; data misfit.](../figures/enki_line.png)
+
+![Fig. 2. Line 30060: EM1DFM, the ensemble median, and the width of its 80% interval.](../figures/enki_vs_em1dfm.png)
+
+## 4.3 Sharp-contact model
+
+SHARP
+
+## 4.4 Sensitivity to the data error
+
+The marginal likelihood prefers ever smaller relative data errors, down to the channel floors: 1% scores −17,727 on line 30050, against −18,767 for 5%. At 1% the data are still fitted to within the error (median misfit 0.82), so the measurement noise is indeed small. The errors that matter are of another kind: the earth is not one-dimensional, the calibration is imperfect, and the bird averages over about 100 m where a log averages over a metre. All three repeat from one sounding to the next, which a likelihood that treats soundings as independent cannot see. Table 3 shows the trade-off for the smooth model.
+
+**Table 3.** Smooth model at 1% and 5% relative data error, scored against boreholes and logs.
+
+| Data error | Depth error, inverted lines | Inside 80%, inverted lines | Inside 80%, uninverted lines | Logs: rank correlation, inside 80% |
+|---|---|---|---|---|
+| 1% (likelihood's choice) | 1.6 m | 70% | 45% | 0.49, 36% |
+| 5% (used) | 1.7 m | 90% | 27% | 0.58, 44% |
+
+Neither setting is better everywhere: 5% is better on the inverted lines and the logs, and worse on the uninverted lines. Neither finds the valley floor.
+
+## 4.5 A learned surrogate as a baseline
+
+To test the premise of the hybrid approach, a gradient-boosting model (Friedman 2001) was trained to reproduce EM1DFM's depth to conductor from the measured channels and bird height. This is a stand-in in the spirit of Friedel et al. (2015), not a replication of their method. Two kinds of input were compared: the raw channels, and four along-line features from a linear state-space model fitted by expectation–maximization (Shumway & Stoffer 1982), with bird height as an explicit input.
+
+**It copies the inversion well.** With each of the six inverted lines held out in turn (39,886 soundings), the raw channels reproduce EM1DFM's depth to conductor with a mean absolute error of 2.3 m ($R^2$ = 0.93). The state-space features do slightly worse (2.9 m, $R^2$ = 0.92), because the inversion is itself a sounding-by-sounding function of the raw channels.
+
+**It inherits the inversion's limits.** On the four uninverted lines, both inputs place the deepest predictions exactly where the valley holes are, so the valley is detected. But the predictions there are 15–40 m too shallow:
+- 2-J-97 (58.5 m): 44 m from the raw channels, 45 m from the features;
+- 1-H-97 (60.3 m): 37 and 33 m;
+- 1-J-96 (59.7 m): 37 and 20 m.
+
+The 80% intervals from the state-space features contained the borehole depth at none of the 12 holes on those lines. They describe how well the inversion was copied, not how well the ground is known. The surrogate's mean error on the 11 uninverted-line holes of Table 2 (6.8–6.9 m) is lower than the smooth ensemble's (8.4 m), mostly because of two holes (1-G-96 and 2-G-96) where the ensemble finds conductive ground near the surface and the driller logged silt. What the ensemble adds is intervals that sometimes contain the truth.
+
+## 4.6 Cost against MCMC
+
+**The 2012 benchmark.** The trans-dimensional MCMC code of Minsley (2011), as configured in 2012, left a run log for a test sounding from an Alaskan survey, recorded on 11 July 2012. The settings were up to 30 layers between 2 and 150 m, a smoothness prior on the change in log resistivity between layers, and a relative data error solved for, with bird height and calibration held fixed. The chain counts as burned in at the first accepted model whose misfit reaches the target, and then runs 100,000 further iterations. The log records 99,681 burn-in iterations, so the sounding took about 200,000 forward evaluations and 1,425 s (about 7 ms per iteration).
+
+**Table 4.** Cost per sounding, and for the survey, against the 2012 MCMC run.
+
+| | MCMC (logged run, 2012) | Smooth ensemble | Sharp-contact ensemble |
+|---|---|---|---|
+| Forward evaluations per sounding | about 200,000 | 1,600 (400 × 4) | 1,600 (400 × 4) |
+| Time per sounding | 1,425 s | 0.67 core-s | 0.14 core-s |
+| All 71,470 soundings | about 3.2 years on one core | about 13 core-hours | about 3 core-hours |
+
+The ensemble uses about 125 times fewer forward evaluations. In wall time the gap is about 2,100 times for the smooth model and 10,000 times for the sharp model, but part of that is the machine and language: the 2012 run was in MATLAB with live plotting enabled. A modern, parallel MCMC would close some of the wall-time gap, though not the factor of 125.
+
+**The 2012 optimizations, measured.** In 2012 the author made two changes to the MCMC code. Neither was measured at the time; both are measured here, running the 2012 code in GNU Octave 8.4 with plotting off. Octave is slower than MATLAB, so the ratios between versions are the result, not the seconds.
+1. **Vectorization of the code base.** Every `repmat` call was replaced by index-based tiling. Only one modified file survives (the reflection-coefficient routine), so the same change was applied to the four other files that call `repmat`. It gives identical numbers to the last digit. A single forward call with sensitivities is 34–51% faster, depending on the number of layers. With identical chains (same seed), 5,000 MCMC iterations ran 27% and 29% faster for two seeds. The reflection-coefficient routine alone accounts for 17–22%.
+2. **Burn-in stopped on detection,** instead of a fixed 10,000 iterations. On eight soundings along line 30050, burn-in was detected after 411–8,325 iterations (median 2,700). That saves about 6% of a 110,000-iteration run. A fixed count is also unsafe: the Alaskan test sounding needed 37,453 iterations with seed 1, so a fixed 10,000 would have stopped it early.
+
+Together, the changes cut the time per sounding by about 32%. The 2012 version also preallocated the chain once, where an earlier version grew it by one model per iteration. In Octave the two run equally fast, so the benefit of preallocation, which in MATLAB of that time could be large, could not be measured here.
 
 # 5 Discussion
 
-DISCUSSION
+**Borrowing along the line is what makes the ensemble method work.** Run sounding by sounding from a broad prior, ES-MDA cannot fit the data: the median misfit stays at 2.0–2.3 whether it takes 4, 8 or 16 steps. The ensemble update is Gaussian. It can shift and stretch a cloud of models, but from a broad start the cloud spans models whose responses differ nonlinearly, and a linear step cannot reach the answer. Along the line, each sounding starts from its neighbour's posterior, so each update is small and nearly linear. The along-line prior is therefore not just a smoothness preference; it is what keeps the Kalman update in its linear regime. It also improves accuracy where it can be checked (Table 2: 1.7 m against 2.7 m on the inverted lines). The cost is that sharp lateral changes are smoothed at the scale of $L_h$, and the method needs flight lines dense enough for neighbours to resemble each other.
+
+**What is inverted for matters more than how.** The smooth and sharp models use the same data, forward model, filter, smoother, gains and error model. They differ only in the question asked, and they place the valley floor about 10 m apart (section 4.3). A smooth Gaussian prior cannot represent a step, so a threshold on a smooth model fires early on the ramp above it. Asking for the depth of a contact directly removes that bias by construction. Trans-dimensional MCMC achieves something similar by letting the number and position of boundaries vary (Malinverno 2002; Minsley 2011). A fixed parameterization with an explicit contact gets much of that benefit at a small fraction of the cost, when the question is a single surface.
+
+SHARP_DISCUSSION
+
+**The intervals are conditional on the model.** A posterior describes uncertainty given its model: the parameterization, the one-dimensional earth, and the error model. When the model is close to right, as for the smooth model at shallow-bedrock holes, the intervals are honest (90% coverage). When it is rigid and sometimes wrong, as for the two-unit model where the stratigraphic contact is not the electrical one, they are far too narrow. The likelihood cannot detect this, because the error repeats from sounding to sounding and the along-line coupling then accumulates false confidence. The split-conformal step used here (Vovk et al. 2005; Angelopoulos & Bates 2023) is a cheap guard. It uses boreholes that are neither in the prior's validation set nor near enough to be used for validation, and it makes no assumption about why the model is wrong. Its guarantee rests on the calibration and validation holes being exchangeable. They are not quite: calibration holes lie 100–300 m from the nearest sounding, validation holes within 100 m, so the recalibrated intervals should err on the wide side.
+
+**A calibration error in the survey data.** Two inversions of different design, one deterministic and one Bayesian, cannot fit the coaxial channels or the 8,171 Hz in-phase, and they miss them in the same direction by the same amount. The coaxial channels read about 12% high and the 8,171 Hz in-phase about 10% low, relative to the other channels. Survey-wide gains are a simple correction, but they cannot distinguish a calibration error from a systematic departure from the one-dimensional earth, and two of the gains (378 Hz in-phase, 129 kHz) are not identifiable from bird height and deep conductivity. The survey should be recalibrated, or its calibration records checked, before further quantitative use.
+
+**Cost, and what it buys.** At 0.14–0.67 core-seconds per sounding, the whole survey can be inverted at every sounding in 3–13 core-hours. That makes it practical to re-invert as new boreholes arrive, to try alternative parameterizations, and to choose hyperparameters by marginal likelihood rather than by hand: the near-real-time goal of Friedel et al. (2015), reached by keeping the physics rather than replacing it with a learned surrogate. The comparison with MCMC is not like for like. MCMC samples a trans-dimensional posterior per sounding, while the ensemble approximates a fixed-dimensional one along the line, and its Gaussian update can understate non-Gaussian features such as the depth–resistivity trade-off of the sharp model. The synthetic test shows that trade-off clearly: with 100 members the ensemble committed to a contact twice as deep as the truth, under a more conductive fill, that fitted the data as well. With 400 members every interval contained the truth.
+
+**Limitations.**
+- The earth is assumed one-dimensional at each sounding. The buried valley is a two- or three-dimensional feature, and its walls may bias a 1D depth.
+- Only every 20th sounding was used. At the full sampling rate, neighbouring data are near copies, and the along-line coupling would need a correlated error model.
+- The relative data error was fixed, not estimated. A slowly varying error term along the line would let the likelihood see repeated errors.
+- Validation rests on 21 holes, only two of them in the buried valley, and the depth prior comes from test holes that cluster where bedrock is shallow.
 
 # 6 Conclusions
 
@@ -244,6 +367,8 @@ The analysis code (database, forward model, ensemble inversion, benchmarks) and 
 
 Abraham JD, Cannia JC, Bedrosian PA, Johnson MR, Ball LB, Sibray SS (2012) Airborne electromagnetic mapping of the base of aquifer in areas of western Nebraska. U.S. Geological Survey Scientific Investigations Report 2011–5219, 38 p.
 
+Angelopoulos AN, Bates S (2023) Conformal prediction: a gentle introduction. Foundations and Trends in Machine Learning 16:494–591. [verify]
+
 Auken E, Christiansen AV, Jacobsen BH, Foged N, Sørensen KI (2005) Piecewise 1D laterally constrained inversion of resistivity data. Geophysical Prospecting 53:497–506. [verify author list]
 
 Emerick AA, Reynolds AC (2013) Ensemble smoother with multiple data assimilation. Computers & Geosciences 55:3–15.
@@ -253,6 +378,8 @@ Evensen G (1994) Sequential data assimilation with a nonlinear quasi-geostrophic
 Evensen G (2009) Data assimilation: the ensemble Kalman filter, 2nd edn. Springer, Berlin.
 
 Farquharson CG, Oldenburg DW, Routh PS (2003) Simultaneous 1D inversion of loop-loop electromagnetic data for magnetic susceptibility and electrical conductivity. Geophysics 68:1857–1869.
+
+Friedman JH (2001) Greedy function approximation: a gradient boosting machine. Annals of Statistics 29:1189–1232.
 
 Friedel MJ, Esfahani A, Iwashita F (2015) Toward real-time three-dimensional mapping of surficial aquifers using a hybrid modeling approach. Hydrogeology Journal. https://doi.org/10.1007/s10040-015-1318-2
 
@@ -277,6 +404,8 @@ Rasmussen CE, Williams CKI (2006) Gaussian processes for machine learning. MIT P
 Rauch HE, Tung F, Striebel CT (1965) Maximum likelihood estimates of linear dynamic systems. AIAA Journal 3:1445–1450.
 
 Shumway RH, Stoffer DS (1982) An approach to time series smoothing and forecasting using the EM algorithm. Journal of Time Series Analysis 3:253–264.
+
+Vovk V, Gammerman A, Shafer G (2005) Algorithmic learning in a random world. Springer, New York.
 
 Ward SH, Hohmann GW (1988) Electromagnetic theory for geophysical applications. In: Nabighian MN (ed) Electromagnetic methods in applied geophysics, vol 1. Society of Exploration Geophysicists, Tulsa, pp 131–311.
 

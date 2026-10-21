@@ -71,4 +71,7 @@ helicopter EM survey ──► resistivity of the ground ──► rock type ─
 - [06 · Ensemble Kalman inversion](06-ensemble-kalman-inversion.md): a 1D EM
   forward model written from the physics, and an ensemble Kalman filter and
   smoother that invert every line with uncertainty, checked against boreholes.
+- [07 · Depth to bedrock](07-depth-to-bedrock.md): the depth to bedrock as a
+  number the inversion solves for, with a sharp contact, and intervals
+  recalibrated on boreholes the checks don't use.
 - More are added as each step is built.

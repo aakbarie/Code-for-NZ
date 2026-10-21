@@ -207,14 +207,20 @@ def results_table(lds, results) -> pd.DataFrame:
     )  # fmt: skip
 
 
-def borehole_table(con, steps: pd.DataFrame, smooth: pd.DataFrame | None = None) -> pd.DataFrame:
-    """Each borehole that reached bedrock, at the nearest step with data within 100 m."""
+def borehole_table(
+    con, steps: pd.DataFrame, smooth: pd.DataFrame | None = None, near=0.0, far=100.0
+) -> pd.DataFrame:
+    """Each borehole that reached bedrock whose nearest step with data is near-far m away.
+
+    0-100 m gives the validation holes; 100-300 m the calibration holes (see `inflation`).
+    """
     holes = con.sql(
         "SELECT a.hole_id, a.bedrock_depth_m, a.bedrock_unit, b.x, b.y "
         "FROM aquifer_base AS a JOIN borehole AS b USING (hole_id) WHERE a.reached_bedrock"
     ).df()
     with_data = steps[steps["height_m"] <= enki.MAX_HEIGHT_M].reset_index(drop=True)
-    keep, dist, idx = enki.nearest(holes, with_data[["x", "y"]].to_numpy())
+    keep, dist, idx = enki.nearest(holes, with_data[["x", "y"]].to_numpy(), far)
+    keep &= dist > near
     holes = holes[keep].assign(distance_m=dist[keep]).reset_index(drop=True)
     at = with_data.iloc[idx[keep]].reset_index(drop=True)
     for c in ("line", "sounding_id", "depth_q10", "depth_q50", "depth_q90", "misfit"):
@@ -230,6 +236,27 @@ def borehole_table(con, steps: pd.DataFrame, smooth: pd.DataFrame | None = None)
         for c in ("coupled_q10", "coupled_q50", "coupled_q90"):
             holes["smooth_" + c.split("_")[1]] = holes["hole_id"].map(sm[c])
     return holes.sort_values(["line", "bedrock_depth_m"], ignore_index=True)
+
+
+def conformity(holes: pd.DataFrame) -> np.ndarray:
+    """How far each borehole depth lies from the median, in log depth, in units of that
+    side of the 80% interval: 1 is on its edge, so s <= 1 means inside."""
+    truth = np.log10(holes["bedrock_depth_m"].clip(*10.0 ** np.array(LOG_DEPTH_RANGE)))
+    lo, mid, hi = (np.log10(holes[c]) for c in ("depth_q10", "depth_q50", "depth_q90"))
+    return np.where(truth < mid, (mid - truth) / (mid - lo), (truth - mid) / (hi - mid))
+
+
+def inflation(scores: np.ndarray, level: float = 0.8) -> float:
+    """Split-conformal factor k: widening both sides of the interval k-fold covers a new
+    hole with probability >= level, if it is exchangeable with the calibration holes."""
+    rank = int(np.ceil((len(scores) + 1) * level))
+    return float(np.sort(scores)[rank - 1]) if rank <= len(scores) else np.inf
+
+
+def widen(q10, q50, q90, k: float):
+    """The 80% interval with each side stretched k-fold in log depth."""
+    lo, mid, hi = np.log10(q10), np.log10(q50), np.log10(q90)
+    return 10.0 ** (mid - k * (mid - lo)), 10.0 ** (mid + k * (hi - mid))
 
 
 def depth_scores(holes: pd.DataFrame) -> pd.DataFrame:
@@ -249,6 +276,10 @@ def depth_scores(holes: pd.DataFrame) -> pd.DataFrame:
             "sharp: median error (m)": (sub["depth_q50"] - truth).abs().median(),
             "sharp: inside 80%": truth.between(sub["depth_q10"], sub["depth_q90"]).mean(),
         }
+        if "depth_lo" in sub:
+            row["sharp: inside recalibrated 80%"] = truth.between(
+                sub["depth_lo"], sub["depth_hi"]
+            ).mean()
         if "smooth_q50" in sub:
             row["smooth: mean error (m)"] = (enki._finite(sub["smooth_q50"]) - truth).abs().mean()
         row["EM1DFM: mean error (m)"] = (sub["em1dfm"] - truth).abs().mean()
@@ -337,13 +368,33 @@ def run(
 
     smooth_path = out_dir / "enki_boreholes.parquet"
     smooth = pd.read_parquet(smooth_path) if smooth_path.exists() else None
+    # the posterior covers uncertainty given the two-unit structure, not the error of the
+    # structure itself; calibrate on holes 100-300 m out, which validation never sees
+    calib = borehole_table(con, steps, near=100.0, far=300.0)
+    calib["score"] = conformity(calib)
+    k = inflation(calib["score"].to_numpy())
+    print("\n5a. Calibration holes (nearest step 100-300 m away; not used for validation):")
+    print(
+        calib[["hole_id", "line", "distance_m", "bedrock_depth_m", "depth_q10", "depth_q50",
+               "depth_q90", "score"]].round(2).to_string(index=False)
+    )  # fmt: skip
+    print(
+        f"   {(calib['score'] <= 1).mean():.0%} inside the 80% interval; split-conformal "
+        f"factor k = {k:.2f} from {len(calib)} holes"
+    )
+    calib.to_parquet(out_dir / "bedrock_calibration.parquet")
+
     holes = borehole_table(con, steps, smooth)
+    holes["depth_lo"], holes["depth_hi"] = widen(
+        holes["depth_q10"], holes["depth_q50"], holes["depth_q90"], k
+    )
     holes.to_parquet(out_dir / "bedrock_boreholes.parquet")
     cols = [
         "hole_id", "line", "distance_m", "bedrock_unit", "bedrock_depth_m",
-        "depth_q10", "depth_q50", "depth_q90", "smooth_q50", "em1dfm", "misfit",
+        "depth_q10", "depth_q50", "depth_q90", "depth_lo", "depth_hi", "smooth_q50", "em1dfm",
+        "misfit",
     ]  # fmt: skip
-    print(f"\n5. Depth to bedrock at the {len(holes)} boreholes within 100 m:")
+    print(f"\n5b. Depth to bedrock at the {len(holes)} boreholes within 100 m:")
     print(holes[[c for c in cols if c in holes]].round(1).to_string(index=False))
     scores = depth_scores(holes)
     print(scores.round(2).to_string())
@@ -359,8 +410,8 @@ def run(
     if smooth_steps_path.exists() and smooth_layers_path.exists():
         figures.bedrock_section(
             steps, pd.read_parquet(smooth_steps_path), pd.read_parquet(smooth_layers_path),
-            lay, holes, line, fig_dir / "bedrock_line.png",
+            lay, holes, line, fig_dir / "bedrock_line.png", k=k,
         )  # fmt: skip
     figures.bedrock_map(steps, bedrock, fig_dir / "bedrock_depth.png")
     print(f"\nfigures: line {line} section, map")
-    return {"settings": settings, "holes": holes, "scores": scores, "steps": steps}
+    return {"settings": settings, "holes": holes, "scores": scores, "steps": steps, "k": k}
