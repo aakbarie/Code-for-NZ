@@ -307,16 +307,34 @@ boreholes and logs:
 There is no free lunch. 5% is better on the inverted lines and the logs and
 worse on the uninverted lines. Neither setting gets the buried valley right.
 
-### Cost
+### Cost, against Burke's MCMC
 
-- **Run time:** 3,577 soundings in 9.9 minutes on 4 cores, which is 0.67
-  core-seconds per sounding.
-- **Forward models:** 1,600 per sounding (400 members × 4 passes).
-- **Comparison:** a trans-dimensional MCMC typically runs 10⁵–10⁶ forward
-  models per sounding, so this is about 100–1,000 times fewer. Burke's own
-  figures for this survey would make the comparison exact.
-- **Every sounding** instead of every 20th would take about 3 hours on the
-  same 4 cores.
+Burke's MATLAB code (`FDEMmcmcV2`) left a run log for a test sounding on
+line 10010, run on 11 July 2012. Its settings (`setUserParameters.m`) were:
+- a chain of 100,000 models;
+- up to 30 layers between 2 and 150 m;
+- a smoothness prior on the layer-to-layer change in log ρ;
+- the relative data error (5% to start) solved for;
+- bird height and calibration held fixed.
+
+| | Burke's MCMC (2012) | EnKI (here) |
+|---|---|---|
+| Forward models per sounding | 100,000 | 1,600 (400 members × 4 passes) |
+| Time per sounding | 1,425 s (23.8 min) | 0.67 core-seconds |
+| Line 30050 (7,110 soundings) | about 117 days on one core | about 80 core-minutes at every sounding |
+| The whole survey (71,470 soundings) | about 3.2 years on one core | about 13 core-hours |
+
+- **Forward models:** the ensemble uses 62 times fewer.
+- **Wall time:** roughly 2,000 times less. Most of that gap is the method, not
+  the machine: in 2012 the code ran in MATLAB with live plotting on, so a
+  modern, parallel MCMC would close some of it, but not the factor of 62.
+- **A caveat in the same log:** `iBurn: 99681`. If that is the sample where
+  burn-in ended, only about 300 of the 100,000 models were usable posterior
+  samples. A converged MCMC for this sounding would need a longer chain, not
+  a shorter one.
+
+For this sounding, the run time is the problem the 2015 hybrid approach set
+out to solve.
 
 ### Data fit
 

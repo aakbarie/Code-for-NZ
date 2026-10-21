@@ -116,9 +116,11 @@ There are at least two, possibly three:
 
 ## Not found
 
-- **Burke Minsley's MCMC results.** Only one test sounding exists, and it's
-  not from this survey. The run for line 30050 (7,110 soundings) was set up,
-  but its output went to a local folder that isn't in Drive.
+- **Burke Minsley's MCMC results.** Only one test sounding exists, on line
+  10010, outside the Morrill block. Its run log and settings give the cost:
+  100,000 models in 1,425 s for one sounding (11 July 2012; note 06). The
+  run for line 30050 (7,110 soundings) was set up, but its output went to a
+  local folder that isn't in Drive.
 - **Raw water-quality data.** The 2015 paper used pore-water specific
   conductivity from about 22 wells. The only copy found sits inside 2012 SOM
   output, where gaps were filled by the model and measured values aren't
