@@ -309,38 +309,52 @@ worse on the uninverted lines. Neither setting gets the buried valley right.
 
 ### Cost, against Burke's MCMC
 
-Burke's MATLAB code (`FDEMmcmcV2`) left a run log for a test sounding on
-line 10010, run on 11 July 2012. Its settings (`setUserParameters.m`) were:
-- a chain of 100,000 models;
+Burke's MATLAB code (`fdemMCMCfun.m`, set up by `setUserParameters.m`) left a
+run log for a test sounding on line 10010, run on 11 July 2012. The settings
+were:
 - up to 30 layers between 2 and 150 m;
 - a smoothness prior on the layer-to-layer change in log ρ;
 - the relative data error (5% to start) solved for;
 - bird height and calibration held fixed.
 
-| | Burke's MCMC (2012) | Optimised by Akbar (30% faster) | EnKI (here) |
+**Burn-in is adaptive in this version.** The chain counts as burned in at
+the first accepted model whose misfit reaches the target
+(`phiD <= chiFac*length(dobs)`). It then runs `Nmar` = 100,000 more
+iterations, and the burn-in is dropped. The log reads `iBurn: 99681`, so this
+sounding took:
+- 99,681 burn-in iterations plus 100,000 kept, about 200,000 forward models
+  in all;
+- 1,425 s, about 7 ms per iteration;
+- an extra sensitivity matrix at every step that adds or removes a layer.
+
+**Akbar's optimisation** (2012) made two changes, together about 30% faster:
+1. the burn-in shortened from 10,000 iterations to 1,000;
+2. the code vectorised.
+
+| | Burke's MCMC (logged run, 2012) | Optimised by Akbar (30% faster) | EnKI (here) |
 |---|---|---|---|
-| Forward models per sounding | 100,000 | 100,000 | 1,600 (400 members × 4 passes) |
+| Forward models per sounding | about 200,000 (99,681 burn-in + 100,000 kept) | fewer burn-in steps | 1,600 (400 members × 4 passes) |
 | Time per sounding | 1,425 s (23.8 min) | about 1,000 s (16.6 min)* | 0.67 core-seconds |
 | Line 30050 (7,110 soundings) | about 117 days on one core | about 82 days* | about 80 core-minutes at every sounding |
 | The whole survey (71,470 soundings) | about 3.2 years on one core | about 2.3 years* | about 13 core-hours |
 
-\* "30% faster" read as 30% less run time. Read as 1.3 times the speed, it
-is 1,096 s per sounding, 90 days for the line and 2.5 years for the survey.
+\* Applying "30% faster" to this run, read as 30% less run time. Read as 1.3
+times the speed, it is 1,096 s per sounding, 90 days for the line and 2.5
+years for the survey.
 
-- **Two kinds of speed-up:** Akbar's optimisation made each MCMC step
-  cheaper, with the same 100,000 steps. The ensemble needs far fewer steps.
-- **Forward models:** the ensemble uses 62 times fewer.
-- **Wall time:** about 2,100 times less than the original code and about
-  1,500 times less than the optimised one. Part of that gap is the machine:
-  in 2012 the code ran in MATLAB with live plotting on, so a modern, parallel
-  MCMC would close some of it, but not the factor of 62.
-- **A caveat in the same log:** `iBurn: 99681`. If that is the sample where
-  burn-in ended, only about 300 of the 100,000 models were usable posterior
-  samples. A converged MCMC for this sounding would need a longer chain, not
-  a shorter one.
-
-For this sounding, the run time is the problem the 2015 hybrid approach set
-out to solve.
+- **Two kinds of speed-up:**
+  - Akbar's vectorising made each MCMC step cheaper;
+  - the shorter burn-in and the ensemble both cut the number of steps.
+- **Forward models:** the ensemble uses about 125 times fewer than the logged
+  run.
+- **Wall time:** about 2,100 times less than the logged run and about 1,500
+  times less than the optimised one. Part of that gap is the machine: in 2012
+  the code ran in MATLAB with live plotting on, so a modern, parallel MCMC
+  would close some of it, but not the factor of 125.
+- **A fixed burn-in is only safe once the chain has converged.** In the
+  logged run, the adaptive rule took 99,681 iterations to reach the target
+  misfit. With a fixed 1,000 on a sounding like this one, the kept samples
+  would start before the chain had settled.
 
 ### Data fit
 
