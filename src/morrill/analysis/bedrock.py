@@ -30,6 +30,7 @@ from pathlib import Path
 import duckdb
 import numpy as np
 import pandas as pd
+from scipy.special import logsumexp
 
 from morrill.analysis import enki, fdem
 
@@ -50,6 +51,9 @@ class Settings:
     depth_sd_scale: float = 2.0  # widens the boreholes' spread of log10 z_b
     rel_noise: float = 0.05  # fixed, as in note 06
     fill_length: float = 1.0  # correlation between fill layers, in layers
+    # independent restarts, pooled: where the data allow a shallow and a deep contact, one
+    # Gaussian ensemble keeps only one of them, chosen by its seed; several can keep both
+    n_starts: int = 3
 
 
 def borehole_stats(con: duckdb.DuckDBPyConnection, exclude: tuple[str, ...] = ()) -> dict:
@@ -133,20 +137,29 @@ def summarise(ens: np.ndarray) -> dict[str, np.ndarray]:
 
 
 def invert_line(ld: enki.LineData, prior: enki.Prior, settings: Settings, seed: int) -> dict:
-    rng = np.random.default_rng(seed)
     sd = enki.data_error(ld.d_obs, ld.system.channel_noise, settings.rel_noise)
     Y = ld.d_obs / sd
     observed = ld.height_m <= enki.MAX_HEIGHT_M
     forwards = _forwards(ld, sd)
-    F, A, logpdf = enki.filter_line(
-        Y, forwards, ld.step_m, observed, prior, settings, rng, clip_fn=clip
-    )
-    S = enki.rts_smoother(F, A)
-    S = clip(S.reshape(-1, S.shape[-1])).reshape(S.shape)  # the smoother can step past bounds
+    runs, logliks, residuals = [], [], []
+    for start in range(settings.n_starts):
+        rng = np.random.default_rng(seed if start == 0 else [seed, start])  # start 0 as before
+        F, A, logpdf = enki.filter_line(
+            Y, forwards, ld.step_m, observed, prior, settings, rng, clip_fn=clip
+        )
+        S = enki.rts_smoother(F, A)
+        runs.append(clip(S.reshape(-1, S.shape[-1])).reshape(S.shape))  # smoother can overstep
+        logliks.append(np.nansum(logpdf) - np.log(sd[observed]).sum())
+        residuals.append(enki._residuals(runs[-1], Y, forwards, observed))
+    S = np.concatenate(runs, axis=1)  # an equal-weight mixture of the starts
+    res = np.stack(residuals)
     return {
         **summarise(S),
-        "residual": enki._residuals(S, Y, forwards, observed),
-        "loglik": np.nansum(logpdf) - np.log(sd[observed]).sum(),
+        # each member is one coherent surface along the line (the smoother updates members)
+        "members": (10.0 ** S[..., DEPTH]).astype(np.float32),
+        "residual": res.mean(axis=0),  # each start's mean model, averaged: channel bias
+        "misfit": np.mean(res**2, axis=(0, 2)),
+        "loglik": float(logsumexp(logliks) - np.log(len(logliks))),
     }
 
 
@@ -164,7 +177,7 @@ def invert_lines(lines_data, prior, settings, workers=4, seed=0):
 def _select_job(args):
     ld, stats, settings = args
     out = invert_line(ld, make_prior(stats, settings), settings, seed=1)
-    return out["loglik"], np.nanmedian(np.mean(out["residual"] ** 2, axis=1))
+    return out["loglik"], np.nanmedian(out["misfit"])
 
 
 GRID = {
@@ -190,7 +203,11 @@ def select_settings(ld, stats, base: Settings, grid: dict, workers=4) -> pd.Data
 
 
 def results_table(lds, results) -> pd.DataFrame:
-    keys = [k for k in next(iter(results.values())) if k not in ("residual", "loglik")]
+    keys = [
+        k
+        for k in next(iter(results.values()))
+        if k not in ("residual", "misfit", "loglik", "members")
+    ]
     return pd.concat(
         [
             pd.DataFrame(
@@ -198,7 +215,7 @@ def results_table(lds, results) -> pd.DataFrame:
                     "sounding_id": ld.sounding_id, "line": ld.line, "x": ld.xy[:, 0],
                     "y": ld.xy[:, 1], "height_m": ld.height_m,
                     **{k: results[ld.line][k] for k in keys},
-                    "misfit": np.mean(results[ld.line]["residual"] ** 2, axis=1),
+                    "misfit": results[ld.line]["misfit"],
                 }
             )
             for ld in lds
@@ -254,9 +271,13 @@ def inflation(scores: np.ndarray, level: float = 0.8) -> float:
 
 
 def widen(q10, q50, q90, k: float):
-    """The 80% interval with each side stretched k-fold in log depth."""
+    """The 80% interval with each side stretched k-fold in log depth, kept within 1-150 m."""
     lo, mid, hi = np.log10(q10), np.log10(q50), np.log10(q90)
-    return 10.0 ** (mid - k * (mid - lo)), 10.0 ** (mid + k * (hi - mid))
+    bounds = 10.0 ** np.array(LOG_DEPTH_RANGE)
+    return (
+        np.clip(10.0 ** (mid - k * (mid - lo)), *bounds),
+        np.clip(10.0 ** (mid + k * (hi - mid)), *bounds),
+    )
 
 
 def depth_scores(holes: pd.DataFrame) -> pd.DataFrame:
@@ -331,7 +352,7 @@ def run(
     if select:
         t0 = time.perf_counter()
         # 200 members: with 100, depth and fill resistivity can trade off into a wrong answer
-        table = select_settings(sel, stats, replace(base, n_ensemble=200), grid or GRID)
+        table = select_settings(sel, stats, replace(base, n_ensemble=200, n_starts=1), grid or GRID)
         base = replace(base, **table.iloc[0][list(grid or GRID)].to_dict())
         print(
             f"\n3. Settings by marginal likelihood on line {enki.SELECTION_LINE} "
@@ -356,6 +377,11 @@ def run(
     steps = results_table(lds, results)
     out_dir.mkdir(parents=True, exist_ok=True)
     steps.to_parquet(out_dir / "bedrock_soundings.parquet")
+    np.savez_compressed(
+        out_dir / "bedrock_members.npz",
+        sounding_id=steps["sounding_id"].to_numpy(),
+        depth_m=np.concatenate([results[ld.line]["members"] for ld in lds]),
+    )
     residual = np.concatenate([results[ld.line]["residual"] for ld in lds])
     print(
         f"   data misfit per sounding: median {steps['misfit'].median():.2f}, "

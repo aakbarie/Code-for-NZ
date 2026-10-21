@@ -676,7 +676,7 @@ def bedrock_section(
     ax = axes[1]
     if k is not None and np.isfinite(k):
         lo, hi = widen(sel["depth_q10"], sel["depth_q50"], sel["depth_q90"], k)
-        ax.fill_between(y, lo, np.minimum(hi, 150), color=HIGHLIGHT, alpha=0.1, lw=0,
+        ax.fill_between(y, lo, hi, color=HIGHLIGHT, alpha=0.1, lw=0,
                         label=f"recalibrated 80% (×{k:.1f})")  # fmt: skip
     ax.fill_between(y, sel["depth_q10"], sel["depth_q90"], color=HIGHLIGHT, alpha=0.25, lw=0,
                     label="sharp contact, 80%")  # fmt: skip
@@ -704,5 +704,36 @@ def bedrock_section(
     fig.suptitle(f"Line {line}: inverting for the depth to bedrock directly", x=0.01, ha="left",
                  fontsize=10)  # fmt: skip
     fig.tight_layout(rect=(0, 0, 1, 0.98))
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+
+
+def aquifer_thickness(table, path: Path) -> None:
+    """Mean thickness from the ground to bedrock on each line, by inversion."""
+    smooth_c, em_c = "#eb6834", "#1baf7a"  # categorical slots 2 and 3, after HIGHLIGHT
+    x = np.arange(len(table))
+    fig, ax = plt.subplots(figsize=(9, 4.8))
+    ax.vlines(x - 0.12, table["sharp_cal_q10"], table["sharp_cal_q90"], color=HIGHLIGHT,
+              alpha=0.3, lw=7, label="sharp contact: recalibrated 80%")  # fmt: skip
+    ax.vlines(x - 0.12, table["sharp_raw_q10"], table["sharp_raw_q90"], color=HIGHLIGHT, lw=2.5,
+              label="sharp contact: ensemble 80%")  # fmt: skip
+    ax.scatter(x - 0.12, table["sharp_median"], s=40, color=HIGHLIGHT, edgecolors=SURFACE,
+               linewidths=1.5, zorder=3, label="sharp contact: median")  # fmt: skip
+    ax.scatter(x + 0.12, table["smooth"], s=46, marker="D", color=smooth_c, edgecolors=SURFACE,
+               linewidths=1.5, zorder=3,
+               label="smooth model: first layer under 20 ohm·m")  # fmt: skip
+    ax.scatter(x + 0.12, table["em1dfm"], s=46, marker="s", color=em_c, edgecolors=SURFACE,
+               linewidths=1.5, zorder=3, label="EM1DFM: first layer under 20 ohm·m")  # fmt: skip
+    ax.set_xticks(x, [str(v) for v in table["line"]])
+    ax.set_xlabel("flight line, west to east")
+    ax.set_ylabel("mean depth to bedrock along the line (m)")
+    ax.set_ylim(0, None)
+    ax.grid(axis="y", color=CONTEXT, lw=0.6)
+    ax.set_axisbelow(True)
+    ax.legend(loc="upper left", bbox_to_anchor=(0, -0.16), ncols=3, fontsize=7, frameon=False)
+    _tidy([ax])
+    ax.set_title("Thickness of aquifer material, from the ground down to bedrock", loc="left",
+                 fontsize=10)  # fmt: skip
+    fig.tight_layout()
     fig.savefig(path, dpi=150)
     plt.close(fig)

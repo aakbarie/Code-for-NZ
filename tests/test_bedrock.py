@@ -64,7 +64,7 @@ def test_conformal_factor_and_widening():
     assert bedrock.inflation(scores) == scores[7]
     assert bedrock.inflation(scores[:3]) == np.inf  # too few holes to promise 80%
     lo, hi = bedrock.widen(np.array([5.0]), np.array([10.0]), np.array([40.0]), 2.0)
-    np.testing.assert_allclose([lo[0], hi[0]], [2.5, 160.0])
+    np.testing.assert_allclose([lo[0], hi[0]], [2.5, 150.0])  # 160 m, held to the model's 150
 
 
 def test_conformity_is_one_on_the_interval_edge():
@@ -77,3 +77,22 @@ def test_conformity_is_one_on_the_interval_edge():
     })  # fmt: skip
     # the last hole has bedrock at the surface: it counts as 1 m, the model's shallowest
     np.testing.assert_allclose(bedrock.conformity(holes), [1.0, 1.0, 0.0, 2.0])
+
+
+def test_starts_are_pooled_into_one_mixture():
+    n = 4
+    clean = fdem.channels(
+        fdem.response(SYSTEM, np.tile([1 / 100, 1 / 8], (n, 1)), np.full((n, 1), 12.0), 35.0)
+    )
+    ld = enki.LineData(
+        line=1, sounding_id=np.arange(n), xy=np.zeros((n, 2)), d_obs=clean,
+        height_m=np.full(n, 35.0), step_m=np.r_[0.0, np.full(n - 1, 64.0)], system=SYSTEM,
+        thickness=np.array([]), tops=np.array([0.0]),
+    )  # fmt: skip
+    one = bedrock.Settings(n_ensemble=30, n_starts=1)
+    two = bedrock.Settings(n_ensemble=30, n_starts=2)
+    a = bedrock.invert_line(ld, bedrock.make_prior(STATS, one), one, seed=3)
+    b = bedrock.invert_line(ld, bedrock.make_prior(STATS, two), two, seed=3)
+    assert a["members"].shape == (n, 30) and b["members"].shape == (n, 60)
+    np.testing.assert_array_equal(b["members"][:, :30], a["members"])  # start 0 is unchanged
+    assert np.isfinite(b["loglik"]) and b["misfit"].shape == (n,)
