@@ -82,7 +82,8 @@ def reflection_te(
     """TE reflection coefficient of a layered earth: shape (models, frequencies, wavenumbers).
 
     sigma (M, N): conductivity (S/m) of N layers, the last a half-space;
-    thickness (N-1,): metres. Quasi-static, all layers non-magnetic. Each
+    thickness (N-1,) or (M, N-1): metres, shared or per model. Quasi-static,
+    all layers non-magnetic. Each
     layer j has a vertical wavenumber u_j = sqrt(λ² + iωμ0σ_j); û is the
     "apparent" u seen from the top of a layer, built from the bottom up.
     """
@@ -91,9 +92,12 @@ def reflection_te(
         + 1j * omega[None, :, None, None] * MU0 * sigma[:, None, None, :]
     )  # (M, F, L, N)
     u_hat = u[..., -1]
+    thickness = np.asarray(thickness, dtype=float)
+    per_model = thickness.ndim == 2
     for j in range(sigma.shape[1] - 2, -1, -1):
         uj = u[..., j]
-        e = np.exp(-2 * uj * thickness[j])
+        t = thickness[:, j, None, None] if per_model else thickness[j]
+        e = np.exp(-2 * uj * t)
         tanh = (1 - e) / (1 + e)  # tanh(u_j t_j), stable for any thickness
         u_hat = uj * (u_hat + uj * tanh) / (uj + u_hat * tanh)
     return (lam - u_hat) / (lam + u_hat)

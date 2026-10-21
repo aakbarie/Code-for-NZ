@@ -28,6 +28,10 @@ def main(argv: list[str] | None = None) -> int:
         "enki",
         help="ensemble Kalman inversion of every line (needs: uv sync --extra analysis)",
     )
+    sub.add_parser(
+        "bedrock",
+        help="invert for the depth to bedrock directly (run enki first; needs the extra)",
+    )
 
     args = parser.parse_args(argv)
     if args.command == "verify-raw":
@@ -35,9 +39,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "build":
         build.build()
         return 0
-    if args.command in ("communities", "lithology", "kalman", "enki"):
+    if args.command in ("communities", "lithology", "kalman", "enki", "bedrock"):
         try:
-            from morrill.analysis import communities, enki, kalman, lithology
+            from morrill.analysis import bedrock, communities, enki, kalman, lithology
         except ImportError as err:
             print(f"{err}. Install the analysis extra: uv sync --extra analysis")
             return 1
@@ -46,6 +50,7 @@ def main(argv: list[str] | None = None) -> int:
             "lithology": lithology,
             "kalman": kalman,
             "enki": enki,
+            "bedrock": bedrock,
         }[args.command]
         analysis.run(DB_PATH, DATA_DIR / "derived", REPO_ROOT / "docs" / "figures")
         return 0

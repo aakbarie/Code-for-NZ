@@ -203,7 +203,7 @@ def gaussian_logpdf(y: np.ndarray, D: np.ndarray) -> float:
     return -0.5 * (r @ np.linalg.solve(C, r) + logdet + len(y) * np.log(2 * np.pi))
 
 
-def es_mda(theta, y, forward, rng, n_assim, bounded=True):
+def es_mda(theta, y, forward, rng, n_assim, bounded=True, clip_fn=None):
     """Ensemble smoother with multiple data assimilation, in whitened data units (R = I).
 
     theta (N, p) prior ensemble; y (m,) data / error; forward(theta) -> (N, m) whitened.
@@ -223,7 +223,7 @@ def es_mda(theta, y, forward, rng, n_assim, bounded=True):
         gain = np.linalg.solve(C_dd + alpha * np.eye(len(y)), C_td.T).T  # (p, m)
         theta = theta + (perturbed - D) @ gain.T
         if bounded:
-            theta = clip(theta)
+            theta = (clip_fn or clip)(theta)
     return theta, logpdf
 
 
@@ -236,7 +236,7 @@ def forecast(theta, prior: Prior, a: float, rng) -> np.ndarray:
     return prior.mean + a * (theta - prior.mean) + np.sqrt(1 - a * a) * noise
 
 
-def filter_line(Y, forwards, step_m, observed, prior, settings, rng, bounded=True):
+def filter_line(Y, forwards, step_m, observed, prior, settings, rng, bounded=True, clip_fn=None):
     """Forward pass. Y (n, m) whitened data; forwards[t](theta) whitened predictions at t.
 
     Returns forecast and analysis ensembles (n, N, p) and per-step log predictive density.
@@ -251,7 +251,9 @@ def filter_line(Y, forwards, step_m, observed, prior, settings, rng, bounded=Tru
             theta = forecast(theta, prior, np.exp(-step_m[t] / settings.length_m), rng)
         F[t] = theta
         if observed[t]:
-            theta, logpdf[t] = es_mda(theta, Y[t], forwards[t], rng, settings.n_assim, bounded)
+            theta, logpdf[t] = es_mda(
+                theta, Y[t], forwards[t], rng, settings.n_assim, bounded, clip_fn
+            )
         A[t] = theta
     return F, A, logpdf
 

@@ -86,3 +86,12 @@ def test_ensemble_and_single_calls_agree():
         np.testing.assert_allclose(batch[i], fdem.response(SYSTEM, sigma[i], THICK, heights[i])[0])
     assert fdem.channels(batch).shape == (5, 12)
     assert fdem.channels(batch)[0, 1] == batch[0, 0].imag
+
+
+def test_per_model_thicknesses_match_one_call_per_model():
+    rng = np.random.default_rng(5)
+    sigma = 10 ** -rng.uniform(0, 3, size=(4, 3))
+    thick = rng.uniform(1, 30, size=(4, 2))
+    batch = fdem.response(SYSTEM, sigma, thick, 30.0)
+    for i in range(4):
+        np.testing.assert_allclose(batch[i], fdem.response(SYSTEM, sigma[i], thick[i], 30.0)[0])

@@ -581,6 +581,21 @@ def enki_compare(steps, layer_table, em, lay, holes, line, path: Path) -> None:
 
 def enki_depth_map(steps, bedrock, path: Path) -> None:
     """Depth to conductor (median) and its 80% interval width, on every line."""
+    _depth_map(
+        steps, bedrock, path, "Depth to conductor, median",
+        "Ensemble Kalman inversion of all 12 lines (every 20th sounding)",
+    )  # fmt: skip
+
+
+def bedrock_map(steps, bedrock, path: Path) -> None:
+    """Depth to bedrock from the sharp-contact inversion, and its 80% interval width."""
+    _depth_map(
+        steps, bedrock, path, "Depth to bedrock, median",
+        "Sharp-contact ensemble Kalman inversion of all 12 lines (every 20th sounding)",
+    )  # fmt: skip
+
+
+def _depth_map(steps, bedrock, path: Path, left_title: str, suptitle: str) -> None:
     from matplotlib.lines import Line2D
 
     vmax = 80
@@ -588,7 +603,7 @@ def enki_depth_map(steps, bedrock, path: Path) -> None:
     depth = np.minimum(steps["depth_q50"], 125)
     width = np.minimum(steps["depth_q90"], 125) - steps["depth_q10"]
     for ax, values, cmap, top, label, title in (
-        (axes[0], depth, BLUE_RAMP, vmax, "depth (m)", "Depth to conductor, median"),
+        (axes[0], depth, BLUE_RAMP, vmax, "depth (m)", left_title),
         (axes[1], width, ORANGE_RAMP, 40, "80% interval width (m)", "Its uncertainty"),
     ):
         sc = ax.scatter(
@@ -615,10 +630,67 @@ def enki_depth_map(steps, bedrock, path: Path) -> None:
         [handle], ["borehole: depth to bedrock"], loc="lower left", fontsize=7, frameon=False
     )
     axes[0].set_ylabel("northing (km, UTM 13N)")
-    fig.suptitle(
-        "Ensemble Kalman inversion of all 12 lines (every 20th sounding)", x=0.01, ha="left",
-        fontsize=10,
+    fig.suptitle(suptitle, x=0.01, ha="left", fontsize=10)
+    fig.tight_layout(rect=(0, 0, 1, 0.98))
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+
+
+def bedrock_section(steps, smooth_steps, smooth_layers, lay, holes, line, path: Path) -> None:
+    """One line: the sharp contact over the smooth model's resistivity, and both depths."""
+    sel = steps[steps["line"] == line].sort_values("y").reset_index(drop=True)
+    sm = smooth_steps[smooth_steps["line"] == line].set_index("sounding_id").loc[sel["sounding_id"]]
+    y = sel["y"].to_numpy() / 1000
+    ids = sel["sounding_id"].to_numpy()
+    pos = dict(zip(ids, y, strict=True))
+    on = holes[holes["line"] == line]
+    hy = np.array([pos[s] for s in on["sounding_id"]])
+    fig, axes = plt.subplots(
+        3, 1, figsize=(12, 9.5), sharex=True, gridspec_kw={"height_ratios": [2.2, 2.2, 1]}
+    )
+    q50 = _wide(smooth_layers, ids, "q50")
+    width = _wide(smooth_layers, ids, "q90") - _wide(smooth_layers, ids, "q10")
+    _section(
+        axes[0], fig, y, q50, lay, BLUE_RAMP.reversed(), *RHO_LIMITS,
+        "smooth model: median resistivity (ohm·m)\ndarker = more conductive", rho=True,
+        fade=width,
     )  # fmt: skip
+    axes[0].fill_between(y, sel["depth_q10"], sel["depth_q90"], color=SURFACE, alpha=0.35, lw=0)
+    axes[0].plot(y, sel["depth_q50"], color=SURFACE, lw=1.6, label="sharp contact: median")
+    for yy, (_, r) in zip(hy, on.iterrows(), strict=True):
+        axes[0].plot([yy, yy], [0, r["bedrock_depth_m"]], color=INK, lw=0.8)
+        axes[0].scatter(yy, r["bedrock_depth_m"], s=36, color=SURFACE, edgecolors=INK,
+                        linewidths=1.2, zorder=4)  # fmt: skip
+    axes[0].legend(loc="lower left", fontsize=7, frameon=False, labelcolor=INK)
+    axes[0].set_title(
+        "Smooth model (note 06) with the sharp-contact depth to bedrock on top (band: 80%)",
+        loc="left",
+    )
+    ax = axes[1]
+    ax.fill_between(y, sel["depth_q10"], sel["depth_q90"], color=HIGHLIGHT, alpha=0.25, lw=0,
+                    label="sharp contact, 80%")  # fmt: skip
+    ax.plot(y, sel["depth_q50"], color=HIGHLIGHT, lw=1.6, label="sharp contact, median")
+    ax.plot(y, np.minimum(sm["depth_q50"].to_numpy(), 125), color=INK_2, lw=1, ls="--",
+            label="smooth model: first layer under 20 ohm·m")  # fmt: skip
+    if len(on):
+        ax.scatter(hy, on["bedrock_depth_m"], s=40, color=SURFACE, edgecolors=INK,
+                   linewidths=1.2, zorder=4, label="borehole: depth to bedrock")  # fmt: skip
+        for yy, (_, r) in zip(hy, on.iterrows(), strict=True):
+            ax.annotate(r["hole_id"], (yy, r["bedrock_depth_m"]), xytext=(6, 6),
+                        textcoords="offset points", fontsize=6.5, color=INK_2)  # fmt: skip
+    ax.set_ylim(125, 0)
+    ax.set_ylabel("depth (m)")
+    ax.legend(loc="lower left", fontsize=7, frameon=False, ncols=2)
+    ax.set_title("Depth to bedrock: sharp contact against the smooth model's threshold", loc="left")
+    ax = axes[2]
+    ax.plot(y, sel["misfit"], color=INK, lw=0.8)
+    ax.axhline(1, color=CONTEXT, lw=1)
+    ax.set_yscale("log")
+    ax.set_ylabel("data misfit\n(1 = to the error)")
+    ax.set_xlabel("northing (km, UTM 13N)")
+    _tidy(axes)
+    fig.suptitle(f"Line {line}: inverting for the depth to bedrock directly", x=0.01, ha="left",
+                 fontsize=10)  # fmt: skip
     fig.tight_layout(rect=(0, 0, 1, 0.98))
     fig.savefig(path, dpi=150)
     plt.close(fig)
