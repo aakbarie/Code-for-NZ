@@ -299,3 +299,113 @@ def lithology_section(
     fig.savefig(path, dpi=150)
     plt.close(fig)
     return line
+
+
+def kalman_depth_map(
+    everything: pd.DataFrame, depth: pd.Series, holes: pd.DataFrame, path: Path
+) -> None:
+    """Depth to conductor predicted from Kalman features on all lines, boreholes ringed."""
+    from matplotlib.lines import Line2D
+
+    vmax = 80
+    pts = everything.set_index("sounding_id").join(depth.rename("depth"))
+    fig, ax = plt.subplots(figsize=(5.6, 13))
+    has = pts["depth"].notna()
+    sc = ax.scatter(
+        pts.loc[has, "x"] / 1000, pts.loc[has, "y"] / 1000, s=4,
+        c=pts.loc[has, "depth"].clip(0, vmax), cmap=BLUE_RAMP, vmin=0, vmax=vmax, lw=0,
+        rasterized=True,
+    )  # fmt: skip
+    inside = holes[
+        holes["x"].between(pts["x"].min() - 300, pts["x"].max() + 300)
+        & holes["y"].between(pts["y"].min() - 300, pts["y"].max() + 300)
+    ]
+    ax.scatter(
+        inside["x"] / 1000, inside["y"] / 1000, s=42, c=inside["bedrock_depth_m"].clip(upper=vmax),
+        cmap=BLUE_RAMP, vmin=0, vmax=vmax, edgecolors=INK, linewidths=1.2, zorder=3,
+    )  # fmt: skip
+    _map_axes(ax, pts.reset_index())
+    ax.set_xlabel("easting (km, UTM 13N)")
+    ax.set_ylabel("northing (km, UTM 13N)")
+    cb = fig.colorbar(sc, ax=ax, shrink=0.35, pad=0.02, extend="max")
+    cb.set_label("depth (m)")
+    cb.ax.invert_yaxis()
+    handle = Line2D([], [], ls="", marker="o", ms=7, mfc="#86b6ef", mec=INK)
+    ax.legend([handle], ["borehole: depth to bedrock"], loc="lower left", fontsize=7, frameon=False)
+    ax.set_title(
+        "Depth to conductor predicted from Kalman features, all 10 lines\n"
+        "(inverted lines: each predicted with its own line held out)",
+        loc="left",
+    )
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+
+
+def kalman_line(
+    everything: pd.DataFrame,
+    feats: pd.DataFrame,
+    pred: pd.DataFrame,
+    holes: pd.DataFrame,
+    line: int,
+    path: Path,
+) -> None:
+    """One flight line: bird height, the Kalman features, surprise, and predicted depth."""
+    sel = everything[everything["line"] == line].set_index("sounding_id")
+    sel = sel.join(feats).join(pred)
+    y = sel["y"].to_numpy() / 1000
+    zs = [c for c in feats.columns if c.startswith("z")]
+    n_panels = 3 + len(zs) + 1
+    ratios = [1] + [1] * len(zs) + [1, 1, 2.2]
+    fig, axes = plt.subplots(
+        n_panels,
+        1,
+        figsize=(13, 2.0 * n_panels),
+        sharex=True,
+        gridspec_kw={"height_ratios": ratios},
+    )
+    axes[0].plot(y, sel["bird_height_m"], color=INK_2, lw=1)
+    axes[0].set_ylabel("bird height (m)")
+    for ax, z in zip(axes[1 : 1 + len(zs)], zs, strict=True):
+        sd = sel[z.replace("z", "sd")]
+        ax.fill_between(y, sel[z] - 2 * sd, sel[z] + 2 * sd, color=HIGHLIGHT, alpha=0.2, lw=0)
+        ax.plot(y, sel[z], color=HIGHLIGHT, lw=1.2)
+        ax.set_ylabel(f"feature {z}")
+    ax = axes[1 + len(zs)]
+    ax.plot(y, sel["nis"], color=INK, lw=0.8)
+    ax.set_yscale("log")
+    ax.set_ylabel("innovation\nscore")
+    ax = axes[2 + len(zs)]
+    ax.plot(y, sel["powerline_monitor"], color=INK_2, lw=0.8)
+    ax.set_ylabel("power-line\nmonitor")
+    ax = axes[-1]
+    ax.fill_between(
+        y, sel["q10"], sel["q90"], color=HIGHLIGHT, alpha=0.2, lw=0, label="80% interval"
+    )
+    ax.plot(y, sel["q50"], color=HIGHLIGHT, lw=1.5, label="predicted depth to conductor")
+    on = holes[holes["line"] == line]
+    hy = everything.set_index("sounding_id").loc[on["sounding_id"], "y"].to_numpy() / 1000
+    ax.scatter(
+        hy, on["bedrock_depth_m"], s=40, color=SURFACE, edgecolors=INK, linewidths=1.2,
+        zorder=3, label="borehole: depth to bedrock",
+    )  # fmt: skip
+    for yy, (_, r) in zip(hy, on.iterrows(), strict=True):
+        ax.annotate(
+            r["hole_id"], (yy, r["bedrock_depth_m"]), xytext=(4, 4),
+            textcoords="offset points", fontsize=6, color=INK_2,
+        )  # fmt: skip
+    ax.invert_yaxis()
+    ax.set_ylabel("depth (m)")
+    ax.set_xlabel("northing (km, UTM 13N)")
+    ax.legend(loc="lower right", fontsize=7, frameon=False)
+    for a in axes:
+        a.grid(axis="x", color=CONTEXT, lw=0.5)
+        for side in ("top", "right"):
+            a.spines[side].set_visible(False)
+    fig.suptitle(
+        f"Line {line} (never inverted): Kalman features from the raw channels, and the "
+        "depth to conductor they predict", x=0.01, ha="left", fontsize=10,
+    )  # fmt: skip
+    fig.tight_layout(rect=(0, 0, 1, 0.98))
+    fig.savefig(path, dpi=150)
+    plt.close(fig)

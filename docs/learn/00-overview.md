@@ -65,4 +65,7 @@ helicopter EM survey ──► resistivity of the ground ──► rock type ─
 - [04 · The histogram model](04-histogram-lithology-model.md): Bayes' rule
   with histograms to turn resistivity into probabilities of coarse sediment,
   fine sediment, and bedrock, with a depth prior and a superposition rule.
+- [05 · Kalman features](05-kalman-features.md): a state-space model along each
+  flight line (Kalman filter, smoother, EM) that removes flight height and
+  extracts smooth features from the raw channels on all ten lines.
 - More are added as each step is built.
