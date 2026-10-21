@@ -343,42 +343,52 @@ sounding took:
 
 ### What Akbar's 2012 optimisation was worth, measured
 
-**The change.** Akbar's version of the reflection-coefficient code
-(`calcrTEsens_v1.m`, June 2012) replaces every `repmat(...)` with
-index-based tiling (`x(:, ones(1, n))`), the standard way to vectorise old
-MATLAB. Akbar also remembers shortening the burn-in from 10,000 iterations
-to 1,000. No surviving version has that change: all of them use the adaptive
-rule above, so it couldn't be measured.
+**The change.** Akbar vectorised Burke's whole code base, replacing every
+`repmat(...)` with index-based tiling (`x(:, ones(1, n))`), the standard way to
+speed up old MATLAB.
+- Only one vectorised file survives in Drive: the reflection-coefficient code
+  `calcrTEsens_v1.m` (June 2012). The rest of the work was on the USGS server.
+- To measure the whole job, the same technique was applied here to the four
+  files that still call `repmat`: `calcHzz.m`, `calcHxx.m`, `fdem1dfwd_v1.m`
+  and `mgd.m`.
+- It gives results identical to the last digit, so this reconstruction should
+  match the server version closely.
+- Akbar also remembers shortening the burn-in from 10,000 iterations to
+  1,000. No surviving version has that change: all of them use the adaptive
+  rule above, so it couldn't be measured.
 
 **How it was measured.**
-- Both versions of the 2012 code from Drive were run in GNU Octave 8.4, on
-  the same sounding, with the July 2012 settings and plotting off.
+- The 2012 code from Drive was run in GNU Octave 8.4, on the same sounding,
+  with the July 2012 settings and plotting off.
 - Octave is slower than 2012 MATLAB, so the seconds differ from the log. The
-  ratio between the versions is the result.
+  ratios between versions are the result.
 
 **One forward call, on identical earths:**
 
-| Layers | Burke's original: data only | Akbar's: data only | Burke's original: data + sensitivities | Akbar's: data + sensitivities |
-|---|---|---|---|---|
-| 2 | 3.5 ms | 2.3 ms (−34%) | 7.6 ms | 6.4 ms (−16%) |
-| 5 | 4.4 ms | 3.0 ms (−31%) | 14.2 ms | 10.7 ms (−25%) |
-| 10 | 5.8 ms | 4.7 ms (−19%) | 25.5 ms | 20.8 ms (−18%) |
-| 20 | 8.9 ms | 7.5 ms (−15%) | 48.4 ms | 40.1 ms (−17%) |
+| Layers | Data only: Burke's | Data only: reflection coefficient vectorised | Data only: whole code base | Data + sensitivities: Burke's | Data + sensitivities: reflection coefficient vectorised | Data + sensitivities: whole code base |
+|---|---|---|---|---|---|---|
+| 2 | 3.7 ms | 2.5 ms | **1.6 ms (−56%)** | 8.0 ms | 5.9 ms | **4.0 ms (−51%)** |
+| 5 | 4.4 ms | 3.3 ms | **2.8 ms (−37%)** | 14.6 ms | 10.5 ms | **8.2 ms (−44%)** |
+| 10 | 5.5 ms | 4.6 ms | **4.1 ms (−25%)** | 24.8 ms | 19.7 ms | **16.3 ms (−34%)** |
+| 20 | 9.0 ms | 7.8 ms | **6.5 ms (−28%)** | 47.3 ms | 37.6 ms | **28.0 ms (−41%)** |
 
-**A whole sounding** (seed 1, burn-in plus 100,000 kept). The two versions
-give identical numbers, so the chains are identical and only the speed
-differs:
+**The MCMC itself.** All three versions give identical numbers, so with the
+same seed the chains are identical and only the speed differs (5,000
+iterations each):
 
-| | Burke's original | Akbar's vectorised version |
-|---|---|---|
-| Burn-in iterations | 37,453 | 37,453 (the same chain) |
-| Time per iteration | 15.2 ms | 12.6 ms |
-| Total | 2,085 s | 1,729 s (**17% faster**) |
+| Seed | Burke's original | Reflection coefficient vectorised | Whole code base vectorised |
+|---|---|---|---|
+| 1 | 75.7 s | 62.8 s (−17%) | 54.9 s (**−27%**) |
+| 2 | 67.8 s | 53.2 s (−22%) | 48.0 s (**−29%**) |
 
-- **Two further seeds,** 5,000 iterations each with identical chains, gave
-  14% and 17%.
-- **So the vectorising is worth about 17% per sounding.** The 30% Akbar
-  remembered was an overestimate.
+**A whole sounding** (seed 1, burn-in plus 100,000 kept) with the
+reflection-coefficient file alone: 2,085 s for Burke's original against
+1,729 s (−17%), with burn-in identical at 37,453 iterations.
+
+- **Akbar's vectorisation of the whole code base cuts the run time by about
+  28%,** which bears out the "30% faster" he remembered.
+- **The reflection-coefficient file** accounts for about 17–22% of that.
+- **The field calculations** and the random-draw helper account for the rest.
 
 **About the copy in Drive.** The June 2012 snapshot of `calcrTEsens_v1.m`
 has a one-line slip in the sensitivity calculation: `Yn(:,:,2)` (the first
