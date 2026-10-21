@@ -354,9 +354,14 @@ speed up old MATLAB.
 - It gives results identical to the last digit, so this reconstruction should
   match the server version closely.
 - Akbar also changed the burn-in, from a fixed 10,000 iterations to stopping
-  as soon as convergence is detected. Every version in Drive already uses
-  the stop-on-detection rule, so the old fixed version isn't there to run.
-  What it was worth is measured below, from how fast real soundings converge.
+  as soon as convergence is detected. The trick that made it work was
+  **preallocation**:
+  - Burke's December 2011 script grows the chain by one model per iteration.
+  - The May 2012 function (`fdemMCMCfun.m`) allocates room for the worst case
+    once, up front (`MC(2*Nmar)`: burn-in plus the kept models), and trims
+    the unused end after the run.
+  - The old fixed-burn-in version isn't in Drive. What stopping on detection
+    was worth is measured below, from how fast real soundings converge.
 
 **How it was measured.**
 - The 2012 code from Drive was run in GNU Octave 8.4, on the same sounding,
@@ -412,6 +417,25 @@ as soon as burn-in was detected:
 **Both changes together:** 6% fewer iterations, each 28% cheaper, so about
 **32% less time per sounding**. That bears out the "30% faster" Akbar
 remembered.
+
+**Preallocation, measured.** Here is the vectorised version run with the chain
+grown one model at a time, against preallocated (seed 1):
+
+| Chain length | Preallocated | Grown |
+|---|---|---|
+| 5,000 | 82.4 s | 85.3 s |
+| 10,000 | 141.1 s | 133.5 s |
+| 20,000 | 243.5 s | 238.5 s |
+
+- **In Octave there is no measurable difference:** both scale linearly, and
+  the gaps are within the noise of runs sharing the machine.
+- **Octave grows struct arrays cheaply; MATLAB does not.** MATLAB's own
+  editor warns about arrays that change size inside a loop, because each
+  growth can copy the whole array.
+- **So the preallocation may have mattered a lot in 2012 MATLAB,** where each
+  run grew the chain 100,000 to 200,000 times. Measuring how much needs
+  MATLAB; Octave can't show it.
+- **The 32% above doesn't include it.**
 
 **About the copy in Drive.** The June 2012 snapshot of `calcrTEsens_v1.m`
 has a one-line slip in the sensitivity calculation: `Yn(:,:,2)` (the first
