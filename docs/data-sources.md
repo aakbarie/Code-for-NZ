@@ -49,10 +49,20 @@ them by hand into `data/raw/` at the paths in the manifest, then run
   altimeter).
 - **Sampling:** 10 Hz, about 3.2 m between soundings.
 
-## The inversion
+## The inversions
 
-- **Coverage:** `inv_model_pt1.csv` holds EM1DFM inversions for 41,330 of the
-  71,470 soundings. No "part 2" was found.
+There are at least two, possibly three:
+
+| File | Soundings | Layers | Notes |
+|---|---|---|---|
+| `inv_model_pt1.csv` | 41,330 of 71,470 | 24 + half-space | EM1DFM; details below |
+| `Morrill_block.res_XYZ_sparse_mod1.csv` | 71,471 | 28 | Line, East, North, DEM, then 28 tops, 28 bottoms, 28 resistivities (layout from a 2012 R script). Probably the USGS inversion. `Morrill_fixed.csv` (= `Morrill_aae_p1` + `p2`) holds the same data in long format. |
+| `Work/i__con1.mod` | ? | ? | Not yet inspected. The name matches EM1DFM's conductivity-model output, and it is dated with the 2008 survey files. Possibly an inversion of the whole block. |
+
+### `inv_model_pt1.csv`
+
+- **Coverage:** EM1DFM inversions for 41,330 of the 71,470 soundings. No
+  "part 2" was found.
 - **Format:** 5 header lines, then per sounding x, y and 25 conductivities in
   S/m. The x and y values are stored at single precision (about 0.5 m), so
   match them to soundings with a tolerance.
@@ -80,6 +90,14 @@ them by hand into `data/raw/` at the paths in the manifest, then run
   - **1N-97:** 18 m of "Clay" that logs at about 71 ohm·m, far above any other
     clay in the area. The label, the depth registration, or the clay itself is
     unusual.
+
+## Available elsewhere
+
+- **USGS base-of-aquifer picks** for western Nebraska (Abraham et al., 2012,
+  USGS SIR 2011-5219): `western_NE_AEM_picks.txt` (NAD83 UTM 13N, elevations
+  in NGVD29) plus grids and shapefiles, published with the report on
+  pubs.usgs.gov. Not in Drive. They are an independent check on the borehole
+  `aquifer_base` view.
 
 ## Not found
 
