@@ -98,3 +98,14 @@ def test_link_and_compare_with_boreholes(con):
         "FROM borehole_vs_model WHERE hole_id = '1E-96' AND layer = 1"
     ).fetchone()
     assert row == (1, pytest.approx(1000 / 505), 100.0)
+
+
+def test_conductor_depth_view(con):
+    inversion.load(con, FIXTURES, "inversion.csv")
+    rows = con.sql(
+        "SELECT sounding_id, conductor_top_m FROM model_conductor_depth ORDER BY sounding_id"
+    ).fetchall()
+    # location 1: 100, 10, 50 ohm·m -> conductor at the top of layer 2 (2 m);
+    # location 2: 50, 20, 25 -> nothing below 20; location 3: layer 2 is 1e6 ohm·m;
+    # location 4 matches no sounding.
+    assert rows == [(1, 2.0), (2, None), (3, None), (None, None)]

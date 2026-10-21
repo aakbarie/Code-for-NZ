@@ -239,6 +239,20 @@ CREATE VIEW model_resistivity_clean AS
 SELECT *, resistivity_ohm_m BETWEEN 1 AND 1000 AS plausible
 FROM model_resistivity;
 
+-- Depth to the top of the first conductive layer (< 20 ohm·m) in each model
+-- profile: in this valley, the base of the sandy aquifer on Brule/Chadron/Pierre
+-- bedrock. Layers above 1.8 m are skipped so a thin conductive soil doesn't count.
+-- NULL where no layer in the top 125 m is that conductive.
+CREATE VIEW model_conductor_depth AS
+SELECT
+    m.run_id,
+    m.sounding_id,
+    min(l.top_m) FILTER (WHERE m.resistivity_ohm_m < 20 AND l.top_m >= 1.8) AS conductor_top_m
+FROM model_resistivity AS m
+JOIN model_layer AS l USING (layer)
+WHERE l.thickness_m IS NOT NULL
+GROUP BY m.run_id, m.sounding_id;
+
 -- Ground truth against each model run: the borehole log averaged over a layer
 -- (in conductivity) next to the model's value for that layer at the nearest
 -- sounding the run covers.

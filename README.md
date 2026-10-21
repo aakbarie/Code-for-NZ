@@ -20,10 +20,10 @@ the time.
 
 | Step | What | Status |
 |---|---|---|
-| 1 | A single, documented database of the survey, inversions, and borehole data | boreholes done; airborne survey and inversions waiting on the large files |
+| 1 | A single, documented database of the survey, inversions, and borehole data | done for the survey, the EM1DFM inversion and all borehole data; other inversions and the 2015 results still to load |
 | 2 | Resistivity from ML + statistics, validated by holding out whole boreholes, with calibrated uncertainty; benchmarked against the 2015 SOM results and MCMC | planned |
 | 3 | From resistivity to lithology, hydraulic conductivity, and a MODFLOW 6 groundwater model. Builds on the spatial-continuity approach of Friedel & Iwashita (2013): ML trend plus geostatistics on the residuals, tested on a synthetic aquifer with PEST++ pilot points | planned |
-| + | Network analysis: a similarity network of soundings (small-world structure, hydrostratigraphic communities) and a travel-time flow network of the 3D aquifer (connectivity, preferential paths) | planned |
+| + | Network analysis: a similarity network of soundings (small-world structure, hydrostratigraphic communities) and a travel-time flow network of the 3D aquifer (connectivity, preferential paths) | first result: UMAP + Leiden communities ([note 03](docs/learn/03-airborne-and-communities.md)) |
 
 See [docs/learn/02](docs/learn/02-continuity-connectivity-networks.md) for the
 reasoning behind Steps 3 and +.
@@ -41,15 +41,19 @@ Download the files into `data/raw/` (keeping the paths in the manifest), then:
 ```bash
 uv run morrill verify-raw   # which files are present, missing, or the wrong version
 uv run morrill build        # build data/morrill.duckdb and run the data checks
+
+uv sync --extra analysis    # once: UMAP, Leiden, matplotlib
+uv run morrill communities  # group soundings by resistivity profile, write figures
 ```
 
 ## Layout
 
 ```
-src/morrill/      Python package (database build, loaders, checks)
+src/morrill/      Python package (database build, loaders, checks, analysis/)
 manifests/        list of raw input files with checksums
 tests/            automated tests
 docs/learn/       plain-language notes explaining each step
+docs/figures/     figures used in the notes
 legacy/2015-r/    the original 2015 R scripts, kept for the record
 data/             raw files and the built database (gitignored)
 ```

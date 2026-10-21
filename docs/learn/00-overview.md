@@ -58,4 +58,8 @@ helicopter EM survey ──► resistivity of the ground ──► rock type ─
 - [02 · Continuity, connectivity, and networks](02-continuity-connectivity-networks.md):
   variograms, the 2013 hybrid approach and how to make it rigorous, why
   connectivity matters for flow, and small-world network analysis.
+- [03 · Airborne survey, inversion, and communities](03-airborne-and-communities.md):
+  what the helicopter measures, ellipsoid vs sea-level heights, how the 2012
+  inversion compares with the logs, depth to bedrock, and UMAP + Leiden
+  communities.
 - More are added as each step is built.

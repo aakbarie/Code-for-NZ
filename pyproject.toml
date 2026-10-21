@@ -15,6 +15,16 @@ dependencies = [
     "scipy>=1.13",
 ]
 
+[project.optional-dependencies]
+# exploratory analyses (uv sync --extra analysis)
+analysis = [
+    "umap-learn>=0.5",
+    "scikit-learn>=1.4",
+    "python-igraph>=0.11",
+    "leidenalg>=0.10",
+    "matplotlib>=3.8",
+]
+
 [project.scripts]
 morrill = "morrill.cli:main"
 

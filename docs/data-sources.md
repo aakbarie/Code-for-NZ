@@ -13,14 +13,15 @@ checksums, is [`manifests/raw_files.csv`](../manifests/raw_files.csv).
 | Formation picks | `CSD_strat.csv` | yes (102 holes, 210 intervals) |
 | Inversion layering | `inv_model_pt1_bi.csv`, line 1 | yes (24 layers + half-space) |
 | RESOLVE system | `hemSystem.txt` (New 07.16) | yes (`hem_channel`) |
-| **Airborne survey** | `NPblock2008_phaseCorr_fixed.csv` (16 MB) | **no**: file not yet retrieved |
-| **Inverted resistivity** | `inv_model_pt1.csv` (9.9 MB) | **no**: file not yet retrieved |
-| 2015 SOM benchmark | `Morrill_block_test_*_voxler.csv` (9–12 MB each) | no: file not yet retrieved |
+| Airborne survey | `NPblock2008_phaseCorr_fixed.csv` | yes (71,470 soundings, 12 channels) |
+| Inverted resistivity | `inv_model_pt1.csv` | yes (41,330 soundings × 25 layers) |
+| 28-layer inversion | `Morrill_block.res_XYZ_sparse_mod1.csv` (37 MB) | no: not retrieved |
+| 2015 SOM benchmark | `Morrill_block_test_*_voxler.csv` (9–12 MB each) | no: not retrieved |
 
-The large files are in Google Drive but couldn't be pulled into the build
-environment: the Drive connector stops at about 5–10 MB per file. Download
-them by hand into `data/raw/` at the paths in the manifest, then run
-`uv run morrill verify-raw` and `uv run morrill build`.
+The Drive connector can't transfer files over about 5 MB, and the build
+environment can't reach Google Drive directly, so large files were uploaded
+by hand. To get the rest: download them into `data/raw/` at the paths in the
+manifest, then run `uv run morrill verify-raw` and `uv run morrill build`.
 
 ## The airborne survey
 
@@ -29,12 +30,16 @@ them by hand into `data/raw/` at the paths in the manifest, then run
 - **Block:** the Morrill block is the survey's block 3 (lines `300xx`), with
   north–south lines about 200 m apart.
 - **Master file:** `NPblock2008_phaseCorr_fixed.csv` has exactly 71,470 rows,
-  the sounding count in the 2015 paper. That count is inferred from file
-  sizes and needs checking once the file is local. The `_v1`, `_d1` and
-  `_all_v1` variants add flag columns to the same rows.
-- **Columns** (from a Drive search snippet): `Line`, `FID`, `x`, `y`, `DTM`,
-  `LASER`, `Z`, `MAG`, `CPPL`, and the 12 EM channels `CPI400`, `CPQ400` …
-  `CPQ140K`.
+  the sounding count in the 2015 paper: 10 north–south lines (L30010–L30100)
+  and 2 tie lines (T39010, T39020). The `_v1`, `_d1` and `_all_v1` variants
+  add flag columns to the same rows.
+- **Columns:**
+  - `Line` (name, e.g. `L30010`) and `LINE` (number);
+  - `FID`, `x`, `y`, `DTM`, `LASER`;
+  - `Z` (= `DTM` + `LASER`, the bird's elevation);
+  - `MAG`, `CPPL` (power-line monitor);
+  - the 12 EM channels `CPI400`, `CPQ400` … `CPQ140K`.
+- **Missing values** are written as `?`: 2 in `CPPL` and 504 in `MAG`.
 - **Coordinates:** NAD83, UTM zone 13N (EPSG:26913).
 - **Heights are ellipsoidal.** The report gives the DTM "in metres above the
   WGS84 ellipsoid". Borehole collars sit 14.5–16.9 m above the nearby DTM,
@@ -61,8 +66,9 @@ There are at least two, possibly three:
 
 ### `inv_model_pt1.csv`
 
-- **Coverage:** EM1DFM inversions for 41,330 of the 71,470 soundings. No
-  "part 2" was found.
+- **Coverage:** EM1DFM inversions for 41,330 of the 71,470 soundings, which
+  are exactly the first six lines (L30010–L30060), in survey order. Each
+  location sits within 0.26 m of its sounding. No "part 2" was found.
 - **Format:** 5 header lines, then per sounding x, y and 25 conductivities in
   S/m. The x and y values are stored at single precision (about 0.5 m), so
   match them to soundings with a tolerance.
