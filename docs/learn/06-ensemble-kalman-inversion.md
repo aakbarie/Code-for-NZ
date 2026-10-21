@@ -310,7 +310,9 @@ worse on the uninverted lines. Neither setting gets the buried valley right.
 ### Cost, against Burke's MCMC
 
 Burke's MATLAB code (`fdemMCMCfun.m`, set up by `setUserParameters.m`) left a
-run log for a test sounding on line 10010, run on 11 July 2012. The settings
+run log for a test sounding on line 10010, run on 11 July 2012. The sounding
+is from an Alaskan survey (northing 7,191,968 m), not Nebraska. The run used
+Akbar's vectorised forward model (`fdem1dfwd_v1.m`, below). The settings
 were:
 - up to 30 layers between 2 and 150 m;
 - a smoothness prior on the layer-to-layer change in log ρ;
@@ -327,34 +329,76 @@ sounding took:
 - 1,425 s, about 7 ms per iteration;
 - an extra sensitivity matrix at every step that adds or removes a layer.
 
-**Akbar's optimisation** (2012) made two changes, together about 30% faster:
-1. the burn-in shortened from 10,000 iterations to 1,000;
-2. the code vectorised.
+| | Burke's MCMC (logged run, 2012) | EnKI (here) |
+|---|---|---|
+| Forward models per sounding | about 200,000 (99,681 burn-in + 100,000 kept) | 1,600 (400 members × 4 passes) |
+| Time per sounding | 1,425 s (23.8 min) | 0.67 core-seconds |
+| Line 30050 (7,110 soundings) | about 117 days on one core | about 80 core-minutes at every sounding |
+| The whole survey (71,470 soundings) | about 3.2 years on one core | about 13 core-hours |
 
-| | Burke's MCMC (logged run, 2012) | Optimised by Akbar (30% faster) | EnKI (here) |
+- **Forward models:** the ensemble uses about 125 times fewer.
+- **Wall time:** about 2,100 times less. Part of that gap is the machine: in
+  2012 the code ran in MATLAB with live plotting on, so a modern, parallel
+  MCMC would close some of it, but not the factor of 125.
+
+### What Akbar's 2012 optimisation was worth, measured
+
+**The change.** Akbar's version of the reflection-coefficient code
+(`calcrTEsens_v1.m`, June 2012) replaces every `repmat(...)` with
+index-based tiling (`x(:, ones(1, n))`), the standard way to vectorise old
+MATLAB. Akbar also remembers shortening the burn-in from 10,000 iterations
+to 1,000. No surviving version has that change: all of them use the adaptive
+rule above, so it couldn't be measured.
+
+**How it was measured.**
+- Both versions of the 2012 code from Drive were run in GNU Octave 8.4, on
+  the same sounding, with the July 2012 settings and plotting off.
+- Octave is slower than 2012 MATLAB, so the seconds differ from the log. The
+  ratio between the versions is the result.
+
+**One forward call, on identical earths:**
+
+| Layers | Burke's original: data only | Akbar's: data only | Burke's original: data + sensitivities | Akbar's: data + sensitivities |
+|---|---|---|---|---|
+| 2 | 3.5 ms | 2.3 ms (−34%) | 7.6 ms | 6.4 ms (−16%) |
+| 5 | 4.4 ms | 3.0 ms (−31%) | 14.2 ms | 10.7 ms (−25%) |
+| 10 | 5.8 ms | 4.7 ms (−19%) | 25.5 ms | 20.8 ms (−18%) |
+| 20 | 8.9 ms | 7.5 ms (−15%) | 48.4 ms | 40.1 ms (−17%) |
+
+**A bug came in with the vectorising.**
+- One line in the last step uses `Yn(:,:,2)`, the admittance of the first
+  layer alone. The original uses `Y(:,:,2)`, the admittance of the whole
+  earth below.
+- The predicted data are unaffected, identical to the last digit.
+- The sensitivity matrix is off by 21–245%. The MCMC uses that matrix to
+  shape its proposals whenever it adds or removes a layer.
+- So the chain still samples the right posterior, but it moves through it
+  differently.
+
+**A whole sounding** (seed 1, burn-in plus 100,000 kept):
+
+| | Burke's original | Akbar's, as written | Akbar's, bug fixed |
 |---|---|---|---|
-| Forward models per sounding | about 200,000 (99,681 burn-in + 100,000 kept) | fewer burn-in steps | 1,600 (400 members × 4 passes) |
-| Time per sounding | 1,425 s (23.8 min) | about 1,000 s (16.6 min)* | 0.67 core-seconds |
-| Line 30050 (7,110 soundings) | about 117 days on one core | about 82 days* | about 80 core-minutes at every sounding |
-| The whole survey (71,470 soundings) | about 3.2 years on one core | about 2.3 years* | about 13 core-hours |
+| Burn-in iterations | 37,453 | **83,644** | 37,453 (the same chain) |
+| Time per iteration | 15.2 ms | 12.5 ms | 12.6 ms |
+| Total | 2,085 s | 2,297 s (**10% slower**) | 1,729 s (**17% faster**) |
 
-\* Applying "30% faster" to this run, read as 30% less run time. Read as 1.3
-times the speed, it is 1,096 s per sounding, 90 days for the line and 2.5
-years for the survey.
+- **The vectorising itself** saves about 17% per iteration, so the 30% Akbar
+  remembered was an overestimate. With identical chains on two further seeds
+  (5,000 iterations each) it saved 14% and 17%.
+- **As written, the bug cost more than the vectorising saved.** The poorer
+  proposals more than doubled the burn-in on this seed, so the whole sounding
+  took longer than with Burke's original.
+- **The July 2012 log** shows the same long burn-in: 99,681 iterations, with
+  the code as written.
+- **One seed** isn't proof that the bug always lengthens burn-in, but the
+  direction is what poorer proposals should do.
 
-- **Two kinds of speed-up:**
-  - Akbar's vectorising made each MCMC step cheaper;
-  - the shorter burn-in and the ensemble both cut the number of steps.
-- **Forward models:** the ensemble uses about 125 times fewer than the logged
-  run.
-- **Wall time:** about 2,100 times less than the logged run and about 1,500
-  times less than the optimised one. Part of that gap is the machine: in 2012
-  the code ran in MATLAB with live plotting on, so a modern, parallel MCMC
-  would close some of it, but not the factor of 125.
-- **A fixed burn-in is only safe once the chain has converged.** In the
-  logged run, the adaptive rule took 99,681 iterations to reach the target
-  misfit. With a fixed 1,000 on a sounding like this one, the kept samples
-  would start before the chain had settled.
+**Two cheap fixes, if the MCMC is ever run again:**
+1. Restore `Y(:,:,2)`, to keep the 17% without the slower burn-in.
+2. Load the Hankel filters once. `fdem1dfwd` declares
+   `persistent lambda` but reloads the filter files on every call. Caching
+   them saved a further 0–20% per call in the test, most for small models.
 
 ### Data fit
 
