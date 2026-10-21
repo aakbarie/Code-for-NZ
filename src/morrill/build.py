@@ -7,8 +7,8 @@ database once everything has loaded, so a failed build leaves nothing broken.
 
 from pathlib import Path
 
-from morrill import db, qc
-from morrill.ingest import boreholes, layers
+from morrill import db, link, qc
+from morrill.ingest import airborne, boreholes, inversion, layers
 from morrill.paths import DB_PATH, RAW_DIR
 
 # Raw inputs used by the build, relative to data/raw (see manifests/raw_files.csv).
@@ -17,12 +17,15 @@ SOURCES = {
     "lithology": "boreholes/CSD_Lith.csv",
     "stratigraphy": "boreholes/CSD_strat.csv",
     "layers": "inversion/inv_model_pt1_bi.csv",
+    "survey": "hem/NPblock2008_phaseCorr_fixed.csv",
+    "inversion": "inversion/inv_model_pt1.csv",
 }
 
 # Known inputs not loaded yet, and why.
 NOT_YET_LOADED = {
-    "hem/NPblock2008_phaseCorr_fixed.csv": "airborne soundings: loader waits on the file",
-    "inversion/inv_model_pt1.csv": "inverted resistivities: loader waits on the file",
+    "inversion/Morrill_block.res_XYZ_sparse_mod1.csv": "28-layer inversion: not retrieved",
+    "inversion/i__con1.mod": "unidentified model file: not retrieved",
+    "benchmark_2015/Morrill_block_test_*_voxler.csv": "2015 SOM results: not retrieved",
 }
 
 
@@ -48,6 +51,9 @@ def build(
         counts |= boreholes.load(
             con, raw_dir, sources["induction"], sources["lithology"], sources["stratigraphy"]
         )
+        counts |= airborne.load(con, raw_dir, sources["survey"])  # needs boreholes (datum)
+        counts |= inversion.load(con, raw_dir, sources["inversion"])  # needs soundings
+        counts |= link.link_boreholes(con)
         results = qc.run(con)
     except BaseException:
         con.close()

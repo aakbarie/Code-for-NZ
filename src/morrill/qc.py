@@ -86,6 +86,42 @@ def few_unreliable_readings(con):
     return share < 0.01, f"{bad} of {n} readings ({share:.2%}) below 1 mS/m"
 
 
+def model_locations_matched(con):
+    """Every model location should sit on an airborne sounding (within 1 m)."""
+    total, unmatched = con.sql(
+        "SELECT count(*), count(*) FILTER (WHERE sounding_id IS NULL) "
+        "FROM (SELECT DISTINCT run_id, location_id, sounding_id FROM model_resistivity)"
+    ).fetchone()
+    return unmatched == 0, f"{unmatched} of {total} model locations not matched to a sounding"
+
+
+def plausible_model_resistivity(con):
+    """Inverted resistivities outside 1-1000 ohm·m are artefacts; expect under 1%."""
+    n, bad = con.sql(
+        "SELECT count(*), count(*) FILTER (WHERE NOT plausible) FROM model_resistivity_clean"
+    ).fetchone()
+    share = bad / n if n else 0.0
+    return share < 0.01, f"{bad} of {n} values ({share:.2%}) outside 1-1000 ohm·m"
+
+
+def datum_offset_consistent(con):
+    """Per-hole (collar - DTM) offsets should agree: median absolute deviation under 1 m."""
+    row = con.sql("SELECT offset_m, n_holes, spread_m FROM vertical_datum").fetchone()
+    if row is None:
+        return False, "no boreholes near enough to a sounding to estimate the offset"
+    offset, n, spread = row
+    return spread < 1.0, f"offset {offset:.2f} m from {n} holes, MAD {spread:.2f} m"
+
+
+def bird_height_reasonable(con):
+    """Above about 60 m the EM signal is weak; expect under 5% of soundings that high."""
+    n, high = con.sql(
+        "SELECT count(*), count(*) FILTER (WHERE bird_height_m > 60) FROM sounding"
+    ).fetchone()
+    share = high / n if n else 0.0
+    return share < 0.05, f"{high} of {n} soundings ({share:.1%}) flown above 60 m"
+
+
 CHECKS: dict[str, Check] = {
     "induction_log_regular_spacing": regular_log_spacing,
     "lithology_contiguous": _contiguous("lithology"),
@@ -94,6 +130,10 @@ CHECKS: dict[str, Check] = {
     "collar_elevations_agree": collars_agree,
     "layers_sum_to_125m": layers_reach_125m,
     "few_unreliable_readings": few_unreliable_readings,
+    "model_locations_matched": model_locations_matched,
+    "plausible_model_resistivity": plausible_model_resistivity,
+    "datum_offset_consistent": datum_offset_consistent,
+    "bird_height_reasonable": bird_height_reasonable,
 }
 
 

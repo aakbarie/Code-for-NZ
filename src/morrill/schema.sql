@@ -96,15 +96,28 @@ CREATE TABLE hem_channel (
 
 -- One row per airborne sounding (one sample along a flight line).
 CREATE TABLE sounding (
-    sounding_id   INTEGER PRIMARY KEY,
-    line          INTEGER NOT NULL,
-    fid           DOUBLE NOT NULL,   -- fiducial (time stamp) along the line
-    x             DOUBLE NOT NULL,
-    y             DOUBLE NOT NULL,
-    ground_elev_m DOUBLE,            -- DTM
-    bird_height_m DOUBLE,            -- laser altimeter: sensor height above ground
-    source_id     VARCHAR NOT NULL REFERENCES source_file (source_id),
+    sounding_id       INTEGER PRIMARY KEY,   -- row order in the survey file, from 1
+    line              INTEGER NOT NULL,      -- e.g. 30010; tie lines are 39xxx
+    is_tie_line       BOOLEAN NOT NULL,
+    fid               DOUBLE NOT NULL,       -- fiducial (time stamp, 10 per second) along the line
+    x                 DOUBLE NOT NULL,
+    y                 DOUBLE NOT NULL,
+    dtm_ellipsoid_m   DOUBLE,  -- ground height as delivered: above the ellipsoid
+    ground_elev_m     DOUBLE,  -- the same, shifted to the boreholes' datum (see vertical_datum)
+    bird_height_m     DOUBLE,  -- laser altimeter: sensor height above ground
+    powerline_monitor DOUBLE,  -- CPPL: high values mean power-line (cultural) noise
+    mag_nt            DOUBLE,  -- magnetic field as delivered (looks like the residual field)
+    source_id         VARCHAR NOT NULL REFERENCES source_file (source_id),
     UNIQUE (line, fid)
+);
+
+-- How airborne heights were moved onto the boreholes' vertical datum.
+CREATE TABLE vertical_datum (
+    name     VARCHAR PRIMARY KEY,
+    offset_m DOUBLE NOT NULL,   -- added to ellipsoidal heights
+    n_holes  INTEGER NOT NULL,  -- boreholes used to estimate it
+    spread_m DOUBLE,            -- median absolute deviation of the per-hole offsets
+    method   VARCHAR NOT NULL
 );
 
 -- The measured response at each sounding: in-phase (i) and quadrature (q), in ppm.
@@ -219,6 +232,37 @@ SELECT
 FROM borehole AS b
 JOIN stratigraphy AS s USING (hole_id)
 GROUP BY b.hole_id, b.x, b.y, b.collar_elev_m;
+
+-- Model resistivities with a plausibility flag. Values outside 1-1000 ohm·m are
+-- inversion artefacts here (the 2015 paper also dropped values above 1000 ohm·m).
+CREATE VIEW model_resistivity_clean AS
+SELECT *, resistivity_ohm_m BETWEEN 1 AND 1000 AS plausible
+FROM model_resistivity;
+
+-- Ground truth against each model run: the borehole log averaged over a layer
+-- (in conductivity) next to the model's value for that layer at the nearest
+-- sounding the run covers.
+CREATE VIEW borehole_vs_model AS
+WITH covered AS (
+    SELECT DISTINCT run_id, sounding_id FROM model_resistivity WHERE sounding_id IS NOT NULL
+),
+nearest AS (
+    SELECT bs.hole_id, c.run_id, bs.sounding_id, bs.distance_m,
+           row_number() OVER (PARTITION BY bs.hole_id, c.run_id ORDER BY bs.distance_m) AS k
+    FROM borehole_sounding AS bs
+    JOIN covered AS c USING (sounding_id)
+)
+SELECT
+    n.hole_id, n.run_id, n.sounding_id, n.distance_m,
+    b.layer, b.coverage,
+    b.resistivity_ohm_m                    AS log_resistivity_ohm_m,
+    m.resistivity_ohm_m                    AS model_resistivity_ohm_m,
+    m.resistivity_ohm_m BETWEEN 1 AND 1000 AS model_plausible
+FROM nearest AS n
+JOIN borehole_layer_resistivity AS b ON b.hole_id = n.hole_id
+JOIN model_resistivity AS m
+  ON m.run_id = n.run_id AND m.sounding_id = n.sounding_id AND m.layer = b.layer
+WHERE n.k = 1;
 
 -- Lithology intervals with their hydrogeologic class.
 CREATE VIEW lithology_classified AS

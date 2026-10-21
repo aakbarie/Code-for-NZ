@@ -12,6 +12,8 @@ SOURCES = {
     "lithology": "lithology.csv",
     "stratigraphy": "stratigraphy.csv",
     "layers": "layers.csv",
+    "survey": "survey.csv",
+    "inversion": "inversion.csv",
 }
 
 
@@ -31,6 +33,9 @@ def test_build_from_fixtures(tmp_path):
     assert con.sql("SELECT count(*) FROM borehole").fetchone()[0] == 3
     assert con.sql("SELECT count(*) FROM hem_channel").fetchone()[0] == 6
     assert con.sql("SELECT count(*) FROM model_layer").fetchone()[0] == 3
+    assert con.sql("SELECT count(*) FROM sounding").fetchone()[0] == 4
+    assert con.sql("SELECT count(*) FROM model_resistivity").fetchone()[0] == 12
+    assert con.sql("SELECT count(*) FROM borehole_sounding").fetchone()[0] > 0
     stored = con.sql("SELECT check_name, passed FROM qc_result ORDER BY 1").fetchall()
     assert stored == sorted((name, passed) for name, passed, _ in results)
 
@@ -38,9 +43,13 @@ def test_build_from_fixtures(tmp_path):
     assert by_name["rock_labels_classified"]
     assert by_name["collar_elevations_agree"]
     assert by_name["lithology_contiguous"]
-    # the fixture logs are deliberately irregular and the layers sum to 4 m
+    assert by_name["datum_offset_consistent"]
+    # the fixtures are deliberately imperfect: irregular log spacing, layers that sum
+    # to 4 m, one model location away from every sounding, one implausible value (1 of 12)
     assert not by_name["induction_log_regular_spacing"]
     assert not by_name["layers_sum_to_125m"]
+    assert not by_name["model_locations_matched"]
+    assert not by_name["plausible_model_resistivity"]
     assert not (tmp_path / "test.duckdb.building").exists()
 
 
