@@ -1,3 +1,29 @@
-.Rproj.user
+# Data never goes in git: raw inputs come from Google Drive (see manifests/),
+# and the database is rebuilt from them.
+data/
+*.duckdb
+*.duckdb.wal
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# R leftovers
+.Rproj.user/
 .Rhistory
 .RData
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
