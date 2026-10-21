@@ -18,8 +18,9 @@ Prior, learned from data rather than set by hand:
   process with exponential correlation exp(-distance / L_h):
       θ_t = m + a (θ_{t-1} - m) + w,   a = exp(-Δ / L_h),   w ~ N(0, (1 - a²) Σ).
   At every sounding its distribution is exactly the prior N(m, Σ); L_h only
-  says how far along the line knowledge carries. L_h and the data error are
-  chosen by maximum marginal likelihood (select_settings).
+  says how far along the line knowledge carries. L_h, the prior's width and
+  c are chosen by maximum marginal likelihood (select_settings); the data
+  error is not (see NOISE_GRID).
 
 Each sounding (the "coupled" mode):
 1. Forecast: push the previous sounding's ensemble one step along the line.
@@ -73,9 +74,10 @@ class Settings:
     step: int = 20  # every 20th sounding, about 64 m: roughly one footprint apart
     # chosen by marginal likelihood (select_settings); these defaults are its answer
     length_m: float = 3000.0  # L_h, along-line correlation length
-    rel_noise: float = 0.05  # data error = sqrt(floor² + (rel_noise · |d|)²)
+    # data error = sqrt(floor² + (rel_noise · |d|)²). Not chosen by likelihood: see NOISE_GRID
+    rel_noise: float = 0.05
     prior_sd_scale: float = 1.5  # multiplies the logs' spread of log10 ρ
-    whole_profile_share: float = 0.4  # c; the logs can't pin it down (see LogStats)
+    whole_profile_share: float = 0.0  # c; the logs can't pin it down (see LogStats)
 
 
 @dataclass(frozen=True)
@@ -474,7 +476,12 @@ GRID = {  # searched together ...
     "prior_sd_scale": [1.0, 1.5, 2.0],
     "whole_profile_share": [0.0, 0.4, 0.7],
 }
-NOISE_GRID = {"rel_noise": [0.01, 0.02, 0.03, 0.05]}  # ... then this, at the best of the above
+# The likelihood also scores these, at the best of the above, but is not allowed to choose:
+# it asks for less noise all the way down to the floors, because the errors that matter
+# (1D earth, calibration, footprint) repeat from one sounding to the next, and a likelihood
+# that treats soundings as independent can't see that. 5% is how far EM1DFM's own models
+# miss the data on most channels (forward_check).
+NOISE_GRID = {"rel_noise": [0.01, 0.02, 0.03, 0.05]}
 
 
 def _finite(depth):
@@ -671,7 +678,6 @@ def run(
 ) -> dict:
     import time
 
-    from morrill.analysis import figures
     from morrill.analysis.kalman import load_survey
 
     con = duckdb.connect(str(db_path), read_only=True)
@@ -710,12 +716,13 @@ def run(
         table = select_settings(sel, stats, quick, grid or GRID)
         best = table.iloc[0][list(grid or GRID)].to_dict()
         noise = select_settings(sel, stats, replace(quick, **best), NOISE_GRID)
-        settings = replace(base, **best, **noise.iloc[0][list(NOISE_GRID)].to_dict())
+        settings = replace(base, **best)
         print(
             f"\n4. Settings by marginal likelihood on line {SELECTION_LINE} "
             f"({len(table) + len(noise)} runs, {time.perf_counter() - t0:.0f} s); top 8:"
         )
         print(table.head(8).round(3).to_string(index=False))
+        print(f"   data error, for information (fixed at {base.rel_noise:.0%}; see NOISE_GRID):")
         print(noise.round(3).to_string(index=False))
     else:
         settings = base
@@ -780,6 +787,15 @@ def run(
     print("\n9. Resistivity at the induction-log holes within 100 m:")
     print("   " + "; ".join(f"{k} {v:.3g}" for k, v in log_summary.items()))
 
+    valley_line, compare_line = draw_figures(con, steps, layer_table, holes, lay, fig_dir)
+    print(f"\nfigures: line {valley_line} section, line {compare_line} against EM1DFM, map")
+    return {"settings": settings, "gains": gains, "holes": holes, "scores": scores, "steps": steps}
+
+
+def draw_figures(con, steps, layer_table, holes, lay, fig_dir: Path) -> tuple[int, int]:
+    """The three figures for note 06; can be redrawn from the saved parquet files."""
+    from morrill.analysis import figures
+
     fig_dir.mkdir(parents=True, exist_ok=True)
     bedrock = con.sql(
         "SELECT a.hole_id, b.x, b.y, a.bedrock_depth_m FROM aquifer_base AS a "
@@ -803,5 +819,4 @@ def run(
         steps, layer_table, em, lay, holes, compare_line, fig_dir / "enki_vs_em1dfm.png"
     )
     figures.enki_depth_map(steps, bedrock, fig_dir / "enki_conductor_depth.png")
-    print(f"\nfigures: line {valley_line} section, line {compare_line} against EM1DFM, map")
-    return {"settings": settings, "gains": gains, "holes": holes, "scores": scores, "steps": steps}
+    return valley_line, compare_line

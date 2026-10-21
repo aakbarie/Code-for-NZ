@@ -53,6 +53,15 @@ manifest, then run `uv run morrill verify-raw` and `uv run morrill build`.
 - **Altitude:** `LASER` is the bird's height above ground (Optech laser
   altimeter).
 - **Sampling:** 10 Hz, about 3.2 m between soundings.
+- **Channel calibration (found in note 06):** three channels disagree with
+  the rest by the same factor at every sounding.
+  - the coaxial 3,345 Hz I and Q read about 12% high;
+  - the 8,171 Hz in-phase reads about 10% low.
+
+  EM1DFM's own models and the ensemble Kalman inversion both miss these
+  channels in the same way. `enki.calibrate` estimates one gain per channel;
+  the 400 Hz in-phase and 129 kHz gains can't be pinned down, because deep
+  conductivity and bird height trade off against them.
 
 ## The inversions
 

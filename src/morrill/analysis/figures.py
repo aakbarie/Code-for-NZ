@@ -438,10 +438,11 @@ def _section(ax, fig, along_km, grid, lay, cmap, vmin, vmax, label, rho=False, f
         vmin=vmin, vmax=vmax, shading="flat", rasterized=True,
     )  # fmt: skip
     if fade is not None:
+        # grey, not white: a pale wash would read as "resistive" on this ramp
         washed = np.where(fade[order][:, :-1].T > FADE_WIDTH, 1.0, np.nan)
         ax.pcolormesh(
             x_edges, depth_edges, washed, cmap=LinearSegmentedColormap.from_list(
-                "wash", [SURFACE, SURFACE]), alpha=0.65, shading="flat", rasterized=True,
+                "wash", [CONTEXT, CONTEXT]), alpha=0.85, shading="flat", rasterized=True,
         )  # fmt: skip
     ax.set_ylim(125, 0)
     ax.set_ylabel("depth (m)")
@@ -491,7 +492,7 @@ def enki_section(steps, layer_table, lay, holes, line, path: Path) -> None:
     _holes_on(axes[0], holes, line, along)
     axes[0].legend(loc="lower left", fontsize=7, frameon=False, labelcolor=INK)
     axes[0].set_title(
-        "Median of the ensemble (washed out where the 80% interval spans more than a factor of 6)",
+        "Median of the ensemble (grey: not resolved, 80% interval wider than a factor of 6)",
         loc="left",
     )
     _section(axes[1], fig, y, width, lay, ORANGE_RAMP, 0, 1.2, "80% interval width\n(decades)")
@@ -560,7 +561,8 @@ def enki_compare(steps, layer_table, em, lay, holes, line, path: Path) -> None:
         label, rho=True, fade=width,
     )  # fmt: skip
     axes[1].set_title(
-        "EnKI median (washed out where the 80% interval spans more than a factor of 6)", loc="left"
+        "EnKI median (grey: not resolved, 80% interval wider than a factor of 6)",
+        loc="left",
     )
     _section(axes[2], fig, y, width, lay, ORANGE_RAMP, 0, 1.2, "80% interval width\n(decades)")
     axes[2].set_title("EnKI uncertainty: width of the 80% interval", loc="left")

@@ -139,8 +139,8 @@ standard error of about 0.25. So c is chosen from the airborne data instead
 It is the discrete form of a Gaussian process with correlation
 exp(−distance / L_h). The factor (1 − a²) is chosen so that the distribution
 at every single sounding is exactly the prior N(m, Σ) (a test checks this).
-L_h only controls how far knowledge carries along the line. With a = 0.99
-this is the same dynamics as note 05's A matrix.
+L_h only controls how far knowledge carries along the line. It is the same
+kind of dynamics as note 05's A = 0.99 I.
 
 ### The update: a Kalman filter for a nonlinear problem
 
@@ -255,4 +255,215 @@ data. On line 30050 that one pass raised the log marginal likelihood from
 
 ## Results
 
-*Pending: the first full run of `uv run morrill enki` is in progress.*
+From `uv run morrill enki`: 400 members, 4 ES-MDA passes, every 20th
+sounding, all 12 lines.
+
+### What the data chose
+
+**Gains, one pass on line 30050** (measured = gain × what a 1D earth predicts):
+
+| 400 Hz I, Q | 1,776 Hz I, Q | coaxial I, Q | 8,171 Hz I, Q | 41 kHz I, Q | 129 kHz I, Q |
+|---|---|---|---|---|---|
+| 1.03, 1.00 | 0.98, 1.01 | **1.12, 1.11** | **0.90**, 1.01 | 0.97, 0.99 | 0.93, 0.97 |
+
+**Settings by marginal likelihood**, from 27 combinations on line 30050:
+
+| L_h | Prior spread × logs' | Whole-profile share c | log p(data) |
+|---|---|---|---|
+| **3,000 m** | **1.5** | **0** | **−18,767** |
+| 6,000 m | 2.0 | 0 | −18,799 |
+| 1,500 m | 1.0 | 0 | −18,803 |
+| 3,000 m | 1.5 | 0.4 | −18,875 |
+
+- **c = 0** in the seven best combinations. Given the airborne data, the deep
+  layers are better left independent of the shallow ones. L_v, refitted to the logs
+  with c = 0, is 9.1 m.
+- **The prior spread** ends up at 0.49 decades: one standard deviation is a
+  factor of 3.
+- **L_h = 3 km** is long, and the scores are close. What it mostly says is
+  that neighbouring soundings 64 m apart tell nearly the same story.
+
+**The data error is the one setting the likelihood isn't allowed to choose.**
+It prefers less noise all the way down to the per-channel floors: 1% scores
+−17,727, against −18,767 for 5%. At 1% the data are still fit to within the
+error (median misfit 0.82), so the *measurement* noise really is small.
+
+The errors that matter here are different:
+- the earth isn't 1D;
+- the calibration is imperfect;
+- the bird averages over about 100 m, a log over about 1 m.
+
+All three repeat from one sounding to the next. A likelihood that treats
+soundings as independent can't see such errors, so it grows ever more
+confident. The data error is therefore fixed at 5%, how far EM1DFM's own
+models miss the data on most channels. The trade-off, scored against the
+boreholes and logs:
+
+| Data error | Depth error, inverted lines | Inside 80%, inverted lines | Inside 80%, uninverted lines | Logs: rank correlation, inside 80% |
+|---|---|---|---|---|
+| 1% (likelihood's choice) | 1.6 m | 70% | 45% | 0.49, 36% |
+| **5% (used)** | **1.7 m** | **90%** | **27%** | **0.58, 44%** |
+
+There is no free lunch. 5% is better on the inverted lines and the logs and
+worse on the uninverted lines. Neither setting gets the buried valley right.
+
+### Cost
+
+- **Run time:** 3,577 soundings in 9.9 minutes on 4 cores, which is 0.67
+  core-seconds per sounding.
+- **Forward models:** 1,600 per sounding (400 members × 4 passes).
+- **Comparison:** a trans-dimensional MCMC typically runs 10⁵–10⁶ forward
+  models per sounding, so this is about 100–1,000 times fewer. Burke's own
+  figures for this survey would make the comparison exact.
+- **Every sounding** instead of every 20th would take about 3 hours on the
+  same 4 cores.
+
+### Data fit
+
+- **Overall:** the median mean squared residual per sounding is 0.53, and
+  90% of soundings are under 0.95. The data are fit to within the assumed
+  error.
+- **Remaining bias:** the 400 Hz in-phase is predicted lower than measured by
+  about 1 error unit, the 41 kHz in-phase by 0.8. These are channels whose
+  gains the data can't pin down.
+- **Bird height:** the median correction δh is −0.2 m, and 80% of
+  soundings fall between −2.1 and +1.6 m.
+
+### Against EM1DFM, on the 6 inverted lines (1,999 soundings)
+
+| Depth | Median difference | EM1DFM inside EnKI's 80% | EnKI 80% width |
+|---|---|---|---|
+| 0–10 m | 0.15 decades | 66% | 0.45 decades |
+| 10–30 m | 0.14 | 74% | 0.51 |
+| 30–60 m | 0.14 | 86% | 0.60 |
+| 60 m and below | 0.22 | 77% | 0.83 |
+
+- **Resistivity:** the two inversions agree to about 40% (0.15 decades)
+  through the top 60 m.
+- **Depth to conductor:** median difference 2.4 m, with no bias. EM1DFM's
+  value falls inside EnKI's 80% interval at 83% of soundings.
+
+### Against the boreholes: depth to conductor vs depth to bedrock
+
+The comparison covers 21 holes within 100 m of a sounding that has data.
+1-J-96 has no such sounding: the nearest one was flown above 60 m, so it was
+never updated.
+
+| | Holes | EnKI along the line: mean error / inside 80% | EnKI sounding by sounding | EM1DFM |
+|---|---|---|---|---|
+| Inverted lines (shallow bedrock, plus 2-L-96 at 26 m) | 10 | **1.7 m / 90%** | 2.7 m / 40% | 2.1 m |
+| Uninverted lines | 11 | 8.4 m / 27% | 8.7 m / 55% | — |
+| Buried valley (2-J-97, 1-H-97) | 2 | 21 m / 0 of 2 | 23 m / 1 of 2 | — |
+
+**Where bedrock is shallow, EnKI beats EM1DFM** (1.7 m against 2.1 m), and
+its intervals are honest (9 of 10 inside).
+
+**On the uninverted lines, its medians are worse than note 05's.** On the
+same 11 holes, note 05's machine learning had a mean error of 6.9 m (Kalman
+features) and 6.8 m (raw channels); EnKI's is 8.4 m.
+- Most of the gap is two holes: 1-G-96 (EnKI 1.8 m, ML 8.2 m, truth 21.9 m)
+  and 2-G-96 (EnKI 7.2 m, ML 13.7 m, truth 16.2 m).
+- At both, EnKI finds conductive ground near the surface. The driller logged
+  silt there, and the data fit at 1-G-96 is poor.
+- What EnKI adds is intervals that sometimes hold the truth: 27% of these
+  holes, against none for note 05.
+
+**In the buried valley it does no better than note 05.**
+
+| Hole | Bedrock | Note 05 (ML on Kalman features) | EnKI median [80%] |
+|---|---|---|---|
+| 2-J-97 | 58.5 m (Pierre) | 45 m [40–48] | 42 m [31–48] |
+| 1-H-97 | 60.3 m (Pierre) | 33 m [30–37] | 36 m [19–36] |
+
+### Why the valley is too shallow
+
+The profiles show what goes wrong.
+- **1-H-97:** EnKI finds a strong conductor (3.6–7.5 ohm·m) starting at
+  63.6 m, the first layer top below the logged shale at 60.3 m. So the shale
+  *is* seen at about the right depth. But it also puts 10 ohm·m at 36–42 m,
+  where the driller logged sand and gravel.
+- **2-J-97:** resistivity falls gradually: 11–22 ohm·m from 48 m, 3.4 ohm·m
+  from 84 m. The induction log reads 30–47 ohm·m down to 55 m; the clay
+  starts at 58.5 m.
+
+Three things combine:
+1. **The valley fill isn't very resistive.** It logs at 30–80 ohm·m, so the
+   20 ohm·m threshold sits only a factor of 2 below it.
+2. **The prior is smooth.** A Gaussian with vertical correlation can't make
+   a sharp step; it ramps down to the shale over 10–20 m.
+3. **The rule takes the first layer under 20 ohm·m,** so it fires near the
+   top of the ramp.
+
+This is the case trans-dimensional MCMC was built for: it lets the number and
+position of sharp boundaries vary. **The fix that keeps EnKI's speed is to
+change what is inverted for:**
+- put the depth to bedrock into θ as a number in its own right, with a fill
+  resistivity above it and a bedrock resistivity below;
+- the ensemble then carries a distribution of depths directly;
+- along the line, the AR(1) prior becomes a statement about how fast the
+  valley floor can change.
+
+That is the next step proposed below.
+
+### Against the induction logs
+
+There are 12 logged holes within 100 m of a sounding, with 160 layer values
+in all.
+
+| | EnKI | EM1DFM (where inverted) |
+|---|---|---|
+| Rank correlation with the log | 0.58 | 0.67 |
+| Median bias | +0.13 decades (35% more resistive) | |
+| Log inside the 80% interval | 44% | |
+
+The 44% is far below 80%, but it isn't a fair test of the interval. The
+interval describes the average under a 100 m footprint, not the 1 m around a
+borehole, and the inversions read about 25–35% more resistive than the logs
+throughout (note 03).
+
+![Line 30070: median resistivity with unresolved cells in grey, its
+uncertainty, depth to conductor with boreholes, and data misfit](../figures/enki_line.png)
+
+![Line 30060: EM1DFM, the EnKI median and its uncertainty](../figures/enki_vs_em1dfm.png)
+
+![Depth to conductor and its uncertainty on every line](../figures/enki_conductor_depth.png)
+
+## What this gives us
+
+- **An inversion of all 12 lines**, including the four nobody inverted,
+  with an 80% interval on every layer and on the depth to conductor, in
+  10 minutes on 4 cores. It agrees with EM1DFM to about 40% where both
+  exist, and beats it against the boreholes where bedrock is shallow.
+- **A finding about the data:**
+  - the coaxial channels read about 12% high, and the 8.2 kHz in-phase about
+    10% low, relative to the rest;
+  - two different inversions agree on it;
+  - it should be corrected before any further use of this survey.
+- **A clear limit:** smooth Gaussian models put the floor of a resistive
+  valley too shallow, and the along-line likelihood is overconfident about
+  the data error.
+
+## Next steps
+
+1. **Invert for the depth to bedrock directly.** θ becomes [depth to
+   bedrock, fill resistivity, bedrock resistivity, cap layer], with a sharp
+   boundary. It is the base of the aquifer, which is what a groundwater
+   model needs.
+2. **Errors that repeat along the line.** Add a slowly varying bias term to
+   the data error, so the filter stops treating neighbouring soundings as
+   independent evidence.
+3. **Benchmark against MCMC** on line 30050, if Burke's run output turns up.
+
+## Questions to think about
+
+1. Why does ES-MDA fail from a broad prior but work when started from the
+   neighbouring sounding? What does "nearly linear" mean for a cloud of 400
+   earths?
+2. The marginal likelihood chose c = 0, but the 13 logs near the survey
+   suggest c ≈ 0.7. Which would you trust for the deep layers, and why?
+3. A gain common to all channels can't be estimated because δh absorbs it.
+   What other pairs of parameters in this problem trade off against each
+   other?
+4. Why does a smooth prior make the valley floor shallower rather than
+   deeper? (Hint: where does the first layer under 20 ohm·m appear on a ramp
+   from 40 down to 4 ohm·m?)
