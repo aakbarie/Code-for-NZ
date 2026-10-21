@@ -62,4 +62,7 @@ helicopter EM survey ──► resistivity of the ground ──► rock type ─
   what the helicopter measures, ellipsoid vs sea-level heights, how the 2012
   inversion compares with the logs, depth to bedrock, and UMAP + Leiden
   communities.
+- [04 · The histogram model](04-histogram-lithology-model.md): Bayes' rule
+  with histograms to turn resistivity into probabilities of coarse sediment,
+  fine sediment, and bedrock, with a depth prior and a superposition rule.
 - More are added as each step is built.

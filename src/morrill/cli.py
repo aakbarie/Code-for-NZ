@@ -16,6 +16,10 @@ def main(argv: list[str] | None = None) -> int:
         "communities",
         help="group soundings by resistivity profile (needs: uv sync --extra analysis)",
     )
+    sub.add_parser(
+        "lithology",
+        help="rock-class probabilities from resistivity (needs: uv sync --extra analysis)",
+    )
 
     args = parser.parse_args(argv)
     if args.command == "verify-raw":
@@ -23,13 +27,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "build":
         build.build()
         return 0
-    if args.command == "communities":
+    if args.command in ("communities", "lithology"):
         try:
-            from morrill.analysis import communities
+            from morrill.analysis import communities, lithology
         except ImportError as err:
             print(f"{err}. Install the analysis extra: uv sync --extra analysis")
             return 1
-        communities.run(DB_PATH, DATA_DIR / "derived", REPO_ROOT / "docs" / "figures")
+        analysis = communities if args.command == "communities" else lithology
+        analysis.run(DB_PATH, DATA_DIR / "derived", REPO_ROOT / "docs" / "figures")
         return 0
     return 2
 

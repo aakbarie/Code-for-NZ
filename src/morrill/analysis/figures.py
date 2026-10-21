@@ -162,3 +162,140 @@ def conductor_depth(
     fig.tight_layout()
     fig.savefig(path, dpi=150)
     plt.close(fig)
+
+
+# Rock classes: categorical slots 1-3 (the three that stay distinguishable in any pairing).
+CLASS_COLOURS = {"coarse": "#2a78d6", "fine": "#eb6834", "bedrock": "#1baf7a"}
+CLASS_LABELS = {
+    "coarse": "coarse sediment (sand, gravel)",
+    "fine": "fine sediment (silt, clay)",
+    "bedrock": "bedrock (siltstone, Brule)",
+}
+
+
+def _rho_axis(ax) -> None:
+    ax.set_xscale("log")
+    ax.set_xlim(1, 1000)
+    ax.set_xlabel("resistivity (ohm·m)")
+    ax.grid(axis="x", color=CONTEXT, lw=0.5)
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+
+
+def lithology_histograms(model, log_hist: pd.DataFrame, path: Path) -> None:
+    """Class likelihoods from the inversion, the same from the logs, and posteriors by depth."""
+    import numpy as np
+
+    from morrill.analysis.lithology import BINS, CLASSES, DEPTH_BANDS
+
+    centres = 10 ** ((BINS[:-1] + BINS[1:]) / 2)
+    fig, axes = plt.subplots(1, 4, figsize=(15, 3.8), sharex=True)
+
+    ax = axes[0]
+    for i, c in enumerate(CLASSES):
+        ax.plot(centres, model.likelihood_[i], color=CLASS_COLOURS[c], lw=2, label=CLASS_LABELS[c])
+        peak = model.likelihood_[i].argmax()
+        ax.annotate(c, (centres[peak], model.likelihood_[i][peak]), xytext=(0, 4),
+                    textcoords="offset points", ha="center", color=INK_2, fontsize=7)  # fmt: skip
+    ax.set_title("P(resistivity | class)\nfrom the INVERSION at boreholes", loc="left")
+    ax.set_ylabel("share per 0.1-decade bin")
+
+    ax = axes[1]
+    for c in CLASSES:
+        v = log_hist.loc[log_hist["cls"] == c, "log_rho"].to_numpy()
+        h, _ = np.histogram(v, bins=BINS)
+        ax.plot(centres, h / max(h.sum(), 1), color=CLASS_COLOURS[c], lw=2)
+    ax.set_title("the same, from the borehole LOGS\n(3 cm readings)", loc="left")
+
+    for ax, (band, label) in zip(axes[2:], [(1, "at 5-15 m"), (3, "below 30 m")], strict=True):
+        depth = np.full(len(centres), (DEPTH_BANDS[band] + min(DEPTH_BANDS[band + 1], 84)) / 2)
+        proba = model.predict_cells(np.log10(centres), depth)
+        for i, c in enumerate(CLASSES):
+            ax.plot(centres, proba[:, i], color=CLASS_COLOURS[c], lw=2)
+        ax.axvline(20, color=INK_2, lw=0.8, ls=(0, (2, 2)))
+        ax.set_ylim(0, 1)
+        ax.set_title(
+            f"P(class | resistivity) {label}\n(dashed: the 2012 20 ohm·m cutoff)", loc="left"
+        )
+    axes[2].set_ylabel("probability")
+    for ax in axes:
+        _rho_axis(ax)
+    fig.legend(*axes[0].get_legend_handles_labels(), loc="upper center", ncol=3, frameon=False,
+               bbox_to_anchor=(0.5, 1.02))  # fmt: skip
+    fig.tight_layout(rect=(0, 0, 1, 0.93))
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+
+
+def lithology_section(
+    cells: pd.DataFrame, lith: pd.DataFrame, holes: pd.DataFrame, path: Path, max_dist_m=200.0
+) -> int:
+    """Most likely class along the flight line with the most nearby boreholes.
+
+    Returns the line number drawn.
+    """
+    import numpy as np
+    from matplotlib.colors import ListedColormap
+    from matplotlib.patches import Rectangle
+    from scipy.spatial import cKDTree
+
+    from morrill.analysis.lithology import CLASSES
+
+    soundings = cells.drop_duplicates("sounding_id")[["sounding_id", "line", "x", "y"]]
+    dist, idx = cKDTree(soundings[["x", "y"]].to_numpy()).query(holes[["x", "y"]].to_numpy())
+    holes = holes.assign(line=soundings["line"].to_numpy()[idx], dist=dist)
+    holes = holes[holes["dist"] <= max_dist_m]
+    line = int(holes["line"].value_counts().idxmax())
+
+    sec = cells[cells["line"] == line].sort_values(["y", "layer"])
+    ys = sec.drop_duplicates("sounding_id")["y"].to_numpy() / 1000
+    n_layers = sec["layer"].max()
+    p = sec[[f"p_{c}" for c in CLASSES]].to_numpy().reshape(len(ys), n_layers, len(CLASSES))
+    best, conf = p.argmax(axis=2).T, p.max(axis=2).T
+    tops = sec.drop_duplicates("layer").sort_values("layer")
+    yedges = np.r_[tops["top_m"].to_numpy(), tops["bottom_m"].to_numpy()[-1]]
+    xedges = np.r_[ys[0], (ys[1:] + ys[:-1]) / 2, ys[-1]]
+
+    fig, axes = plt.subplots(
+        2, 1, figsize=(15, 7), sharex=True, gridspec_kw={"height_ratios": [3, 1.4]}
+    )
+    ax = axes[0]
+    ax.pcolormesh(xedges, yedges, best, cmap=ListedColormap([CLASS_COLOURS[c] for c in CLASSES]),
+                  vmin=-0.5, vmax=2.5, rasterized=True)  # fmt: skip
+    on_line = holes[holes["line"] == line]
+    for _, h in on_line.iterrows():
+        for _, r in lith[lith["hole_id"] == h["hole_id"]].iterrows():
+            if r["from_m"] >= yedges[-1]:
+                continue
+            colour = CLASS_COLOURS.get(r["cls"], CONTEXT)
+            ax.add_patch(Rectangle((h["y"] / 1000 - 0.06, r["from_m"]), 0.12,
+                                   min(r["to_m"], yedges[-1]) - r["from_m"],
+                                   facecolor=colour, edgecolor=INK, lw=0.6, zorder=3))  # fmt: skip
+        ax.annotate(h["hole_id"], (h["y"] / 1000, 0), xytext=(0, 3), textcoords="offset points",
+                    rotation=90, ha="center", va="bottom", fontsize=6, color=INK_2)  # fmt: skip
+    ax.set_ylim(yedges[-1], 0)
+    ax.set_ylabel("depth (m)")
+    ax.set_title(
+        f"Line {line}: most likely class from the histogram model; boreholes within "
+        f"{max_dist_m:.0f} m drawn as logged (grey = not modelled: soil, sandstone, ...)",
+        loc="left", pad=28,
+    )  # fmt: skip
+    handles = [Rectangle((0, 0), 1, 1, color=CLASS_COLOURS[c]) for c in CLASSES]
+    ax.legend(handles, [CLASS_LABELS[c] for c in CLASSES], loc="lower left", ncol=3, frameon=False,
+              bbox_to_anchor=(0, 1.0), fontsize=7)  # fmt: skip
+
+    ax = axes[1]
+    grey = LinearSegmentedColormap.from_list("grey_seq", ["#f0efec", "#52514e"])
+    mesh = ax.pcolormesh(xedges, yedges, conf, cmap=grey, vmin=1 / 3, vmax=1, rasterized=True)
+    ax.set_ylim(yedges[-1], 0)
+    ax.set_ylabel("depth (m)")
+    ax.set_xlabel("northing (km, UTM 13N)")
+    ax.set_title("confidence: probability of the most likely class", loc="left")
+    fig.colorbar(mesh, ax=ax, pad=0.01, fraction=0.03)
+    for a in axes:
+        for side in ("top", "right"):
+            a.spines[side].set_visible(False)
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    return line

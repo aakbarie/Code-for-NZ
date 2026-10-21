@@ -22,7 +22,7 @@ the time.
 |---|---|---|
 | 1 | A single, documented database of the survey, inversions, and borehole data | done for the survey, the EM1DFM inversion and all borehole data; other inversions and the 2015 results still to load |
 | 2 | Resistivity from ML + statistics, validated by holding out whole boreholes, with calibrated uncertainty; benchmarked against the 2015 SOM results and MCMC | planned |
-| 3 | From resistivity to lithology, hydraulic conductivity, and a MODFLOW 6 groundwater model. Builds on the spatial-continuity approach of Friedel & Iwashita (2013): ML trend plus geostatistics on the residuals, tested on a synthetic aquifer with PEST++ pilot points | planned |
+| 3 | From resistivity to lithology, hydraulic conductivity, and a MODFLOW 6 groundwater model. Builds on the spatial-continuity approach of Friedel & Iwashita (2013): ML trend plus geostatistics on the residuals, tested on a synthetic aquifer with PEST++ pilot points | first piece: histogram (Bayes) model of rock class from resistivity ([note 04](docs/learn/04-histogram-lithology-model.md)) |
 | + | Network analysis: a similarity network of soundings (small-world structure, hydrostratigraphic communities) and a travel-time flow network of the 3D aquifer (connectivity, preferential paths) | first result: UMAP + Leiden communities ([note 03](docs/learn/03-airborne-and-communities.md)) |
 
 See [docs/learn/02](docs/learn/02-continuity-connectivity-networks.md) for the
@@ -44,6 +44,7 @@ uv run morrill build        # build data/morrill.duckdb and run the data checks
 
 uv sync --extra analysis    # once: UMAP, Leiden, matplotlib
 uv run morrill communities  # group soundings by resistivity profile, write figures
+uv run morrill lithology    # P(coarse / fine / bedrock) in every model cell, with validation
 ```
 
 ## Layout
