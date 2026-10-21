@@ -365,40 +365,35 @@ rule above, so it couldn't be measured.
 | 10 | 5.8 ms | 4.7 ms (−19%) | 25.5 ms | 20.8 ms (−18%) |
 | 20 | 8.9 ms | 7.5 ms (−15%) | 48.4 ms | 40.1 ms (−17%) |
 
-**A bug came in with the vectorising.**
-- One line in the last step uses `Yn(:,:,2)`, the admittance of the first
-  layer alone. The original uses `Y(:,:,2)`, the admittance of the whole
-  earth below.
-- The predicted data are unaffected, identical to the last digit.
-- The sensitivity matrix is off by 21–245%. The MCMC uses that matrix to
-  shape its proposals whenever it adds or removes a layer.
-- So the chain still samples the right posterior, but it moves through it
-  differently.
+**A whole sounding** (seed 1, burn-in plus 100,000 kept). The two versions
+give identical numbers, so the chains are identical and only the speed
+differs:
 
-**A whole sounding** (seed 1, burn-in plus 100,000 kept):
+| | Burke's original | Akbar's vectorised version |
+|---|---|---|
+| Burn-in iterations | 37,453 | 37,453 (the same chain) |
+| Time per iteration | 15.2 ms | 12.6 ms |
+| Total | 2,085 s | 1,729 s (**17% faster**) |
 
-| | Burke's original | Akbar's, as written | Akbar's, bug fixed |
-|---|---|---|---|
-| Burn-in iterations | 37,453 | **83,644** | 37,453 (the same chain) |
-| Time per iteration | 15.2 ms | 12.5 ms | 12.6 ms |
-| Total | 2,085 s | 2,297 s (**10% slower**) | 1,729 s (**17% faster**) |
+- **Two further seeds,** 5,000 iterations each with identical chains, gave
+  14% and 17%.
+- **So the vectorising is worth about 17% per sounding.** The 30% Akbar
+  remembered was an overestimate.
 
-- **The vectorising itself** saves about 17% per iteration, so the 30% Akbar
-  remembered was an overestimate. With identical chains on two further seeds
-  (5,000 iterations each) it saved 14% and 17%.
-- **As written, the bug cost more than the vectorising saved.** The poorer
-  proposals more than doubled the burn-in on this seed, so the whole sounding
-  took longer than with Burke's original.
-- **The July 2012 log** shows the same long burn-in: 99,681 iterations, with
-  the code as written.
-- **One seed** isn't proof that the bug always lengthens burn-in, but the
-  direction is what poorer proposals should do.
+**About the copy in Drive.** The June 2012 snapshot of `calcrTEsens_v1.m`
+has a one-line slip in the sensitivity calculation: `Yn(:,:,2)` (the first
+layer alone) where the original has `Y(:,:,2)` (the whole earth below).
+- Akbar's working copy on the USGS server had it fixed, so the measurement
+  above uses the corrected line.
+- The slip doesn't change the predicted data, only the sensitivities the
+  MCMC uses to propose new models.
+- Left in, it more than doubled the burn-in on the test seed (83,644
+  iterations), so it would matter if the Drive copy were ever reused.
 
-**Two cheap fixes, if the MCMC is ever run again:**
-1. Restore `Y(:,:,2)`, to keep the 17% without the slower burn-in.
-2. Load the Hankel filters once. `fdem1dfwd` declares
-   `persistent lambda` but reloads the filter files on every call. Caching
-   them saved a further 0–20% per call in the test, most for small models.
+**One more cheap speed-up,** if the MCMC is ever run again: load the Hankel
+filters once. `fdem1dfwd` declares `persistent lambda` but reloads the filter
+files on every call. Caching them saved a further 0–20% per call in the
+test, most for small models.
 
 ### Data fit
 
