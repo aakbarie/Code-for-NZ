@@ -416,6 +416,7 @@ ORANGE_RAMP = LinearSegmentedColormap.from_list(
 )
 RHO_TICKS = [3, 10, 30, 100, 300]
 RHO_LIMITS = (0.5, 2.5)  # log10 ohm·m
+FADE_WIDTH = 0.8  # decades: where the 80% interval spans more than a factor of ~6
 
 
 def _wide(layer_table: pd.DataFrame, ids, col: str):
@@ -427,13 +428,21 @@ def _edges(v):
     return np.r_[v[0] - (mid[0] - v[0]), mid, v[-1] + (v[-1] - mid[-1])]
 
 
-def _section(ax, fig, along_km, grid, lay, cmap, vmin, vmax, label, rho=False):
+def _section(ax, fig, along_km, grid, lay, cmap, vmin, vmax, label, rho=False, fade=None):
+    """A depth section. fade: per-cell widths; cells wider than FADE_WIDTH are washed out."""
     depth_edges = np.r_[lay["top_m"].to_numpy()[:-1], 125.0]  # half-space not drawn
     order = np.argsort(along_km)
+    x_edges = _edges(along_km[order])
     mesh = ax.pcolormesh(
-        _edges(along_km[order]), depth_edges, grid[order][:, :-1].T, cmap=cmap,
+        x_edges, depth_edges, grid[order][:, :-1].T, cmap=cmap,
         vmin=vmin, vmax=vmax, shading="flat", rasterized=True,
     )  # fmt: skip
+    if fade is not None:
+        washed = np.where(fade[order][:, :-1].T > FADE_WIDTH, 1.0, np.nan)
+        ax.pcolormesh(
+            x_edges, depth_edges, washed, cmap=LinearSegmentedColormap.from_list(
+                "wash", [SURFACE, SURFACE]), alpha=0.65, shading="flat", rasterized=True,
+        )  # fmt: skip
     ax.set_ylim(125, 0)
     ax.set_ylabel("depth (m)")
     cb = fig.colorbar(mesh, ax=ax, pad=0.01, fraction=0.025)
@@ -444,7 +453,8 @@ def _section(ax, fig, along_km, grid, lay, cmap, vmin, vmax, label, rho=False):
     return mesh
 
 
-def _holes_on(ax, holes, line, along, label=True):
+def _holes_on(ax, holes, line, along):
+    """Boreholes as sticks down to the bedrock they reached."""
     on = holes[holes["line"] == line]
     for _, r in on.iterrows():
         yy = along(r)
@@ -452,11 +462,6 @@ def _holes_on(ax, holes, line, along, label=True):
         ax.scatter(
             yy, r["bedrock_depth_m"], s=36, color=SURFACE, edgecolors=INK, linewidths=1.2, zorder=4
         )
-        if label:
-            ax.annotate(
-                r["hole_id"], (yy, 0), xytext=(3, 3), textcoords="offset points",
-                fontsize=6, color=INK_2, va="bottom",
-            )  # fmt: skip
 
 
 def _tidy(axes):
@@ -479,15 +484,18 @@ def enki_section(steps, layer_table, lay, holes, line, path: Path) -> None:
     width = _wide(layer_table, ids, "q90") - _wide(layer_table, ids, "q10")
     _section(
         axes[0], fig, y, q50, lay, BLUE_RAMP.reversed(), *RHO_LIMITS,
-        "median resistivity (ohm·m)\ndarker = more conductive", rho=True,
+        "median resistivity (ohm·m)\ndarker = more conductive", rho=True, fade=width,
     )  # fmt: skip
     axes[0].plot(y, np.where(np.isinf(sel["depth_q50"]), np.nan, sel["depth_q50"]), color=SURFACE,
                  lw=1.2, label="depth to conductor (median)")  # fmt: skip
     _holes_on(axes[0], holes, line, along)
     axes[0].legend(loc="lower left", fontsize=7, frameon=False, labelcolor=INK)
-    axes[0].set_title("Median of the ensemble", loc="left")
+    axes[0].set_title(
+        "Median of the ensemble (washed out where the 80% interval spans more than a factor of 6)",
+        loc="left",
+    )
     _section(axes[1], fig, y, width, lay, ORANGE_RAMP, 0, 1.2, "80% interval width\n(decades)")
-    _holes_on(axes[1], holes, line, along, label=False)
+    _holes_on(axes[1], holes, line, along)
     axes[1].set_title(
         "Uncertainty: width of the 80% interval of log10 resistivity (1 = a factor of 10)",
         loc="left",
@@ -509,6 +517,11 @@ def enki_section(steps, layer_table, lay, holes, line, path: Path) -> None:
             hy, on["bedrock_depth_m"], s=40, color=SURFACE, edgecolors=INK, linewidths=1.2,
             zorder=4, label="borehole: depth to bedrock",
         )  # fmt: skip
+        for yy, (_, r) in zip(hy, on.iterrows(), strict=True):
+            ax.annotate(
+                r["hole_id"], (yy, r["bedrock_depth_m"]), xytext=(6, 6),
+                textcoords="offset points", fontsize=6.5, color=INK_2,
+            )  # fmt: skip
     ax.set_ylim(125, 0)
     ax.set_ylabel("depth to conductor (m)")
     ax.legend(loc="lower left", fontsize=7, frameon=False, ncols=2)
@@ -541,19 +554,24 @@ def enki_compare(steps, layer_table, em, lay, holes, line, path: Path) -> None:
     label = "resistivity (ohm·m)\ndarker = more conductive"
     _section(axes[0], fig, y, em_grid, lay, BLUE_RAMP.reversed(), *RHO_LIMITS, label, rho=True)
     axes[0].set_title("EM1DFM (deterministic, each sounding on its own)", loc="left")
+    width = _wide(layer_table, ids, "q90") - _wide(layer_table, ids, "q10")
     _section(
         axes[1], fig, y, _wide(layer_table, ids, "q50"), lay, BLUE_RAMP.reversed(), *RHO_LIMITS,
-        label, rho=True,
+        label, rho=True, fade=width,
     )  # fmt: skip
-    axes[1].set_title("EnKI median (along-line ensemble Kalman inversion)", loc="left")
-    width = _wide(layer_table, ids, "q90") - _wide(layer_table, ids, "q10")
+    axes[1].set_title(
+        "EnKI median (washed out where the 80% interval spans more than a factor of 6)", loc="left"
+    )
     _section(axes[2], fig, y, width, lay, ORANGE_RAMP, 0, 1.2, "80% interval width\n(decades)")
     axes[2].set_title("EnKI uncertainty: width of the 80% interval", loc="left")
-    for i, ax in enumerate(axes):
-        _holes_on(ax, holes, line, along, label=i == 0)
+    for ax in axes:
+        _holes_on(ax, holes, line, along)
     axes[-1].set_xlabel("northing (km, UTM 13N)")
     _tidy(axes)
-    fig.suptitle(f"Line {line}: two inversions of the same data", x=0.01, ha="left", fontsize=10)
+    fig.suptitle(
+        f"Line {line}: two inversions of the same data (sticks: boreholes, down to bedrock)",
+        x=0.01, ha="left", fontsize=10,
+    )  # fmt: skip
     fig.tight_layout(rect=(0, 0, 1, 0.98))
     fig.savefig(path, dpi=150)
     plt.close(fig)

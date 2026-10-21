@@ -474,7 +474,7 @@ GRID = {  # searched together ...
     "prior_sd_scale": [1.0, 1.5, 2.0],
     "whole_profile_share": [0.0, 0.4, 0.7],
 }
-NOISE_GRID = {"rel_noise": [0.02, 0.03, 0.04, 0.05]}  # ... then this, at the best of the above
+NOISE_GRID = {"rel_noise": [0.01, 0.02, 0.03, 0.05]}  # ... then this, at the best of the above
 
 
 def _finite(depth):
@@ -526,6 +526,7 @@ def borehole_table(con, steps, lds, results, prior, settings):
         "SELECT a.hole_id, a.bedrock_depth_m, a.bedrock_unit, b.x, b.y "
         "FROM aquifer_base AS a JOIN borehole AS b USING (hole_id) WHERE a.reached_bedrock"
     ).df()
+    steps = steps[steps["height_m"] <= MAX_HEIGHT_M].reset_index(drop=True)  # with data only
     keep, dist, idx = nearest(holes, steps[["x", "y"]].to_numpy())
     holes = holes[keep].assign(distance_m=dist[keep], step=idx[keep]).reset_index(drop=True)
     at = steps.iloc[holes["step"]].reset_index(drop=True)
@@ -561,8 +562,10 @@ def inside(truth, lo, hi, tops) -> pd.Series:
 
     Conductor depths can only be layer tops, so a true depth of 6.2 m (in the
     layer from 5.6 to 7.2 m) counts as inside an interval that touches 5.6-7.2.
+    And none can be shallower than the first top at or below 1.8 m.
     """
-    k = np.searchsorted(tops, truth, side="right") - 1
+    first = tops[tops >= CONDUCTOR_MIN_TOP_M][0]
+    k = np.searchsorted(tops, np.maximum(truth, first), side="right") - 1
     top, bottom = tops[k], np.r_[tops[1:], np.inf][k]
     return pd.Series((lo <= bottom) & (hi >= top), index=truth.index)
 
@@ -578,9 +581,8 @@ def depth_scores(holes: pd.DataFrame, tops: np.ndarray) -> pd.DataFrame:
         row = {"holes": len(sub)}
         for mode in ("coupled", "independent"):
             row[f"{mode}: MAE (m)"] = (_finite(sub[f"{mode}_q50"]) - truth).abs().mean()
-            row[f"{mode}: inside 80%"] = truth.between(
-                sub[f"{mode}_q10"], sub[f"{mode}_q90"]
-            ).mean()
+            hit = inside(truth, sub[f"{mode}_q10"], sub[f"{mode}_q90"], tops)
+            row[f"{mode}: inside 80%"] = hit.mean()
         row["EM1DFM: MAE (m)"] = (sub["em1dfm"] - truth).abs().mean()
         rows[name] = row
     return pd.DataFrame(rows).T
@@ -594,6 +596,7 @@ def log_comparison(con, steps, layer_table):
         "WHERE l.coverage > 0.8"
     ).df()
     holes = logs.drop_duplicates("hole_id")
+    steps = steps[steps["height_m"] <= MAX_HEIGHT_M].reset_index(drop=True)  # with data only
     keep, dist, idx = nearest(holes, steps[["x", "y"]].to_numpy())
     near = dict(
         zip(holes["hole_id"][keep], steps["sounding_id"].to_numpy()[idx[keep]], strict=True)
@@ -659,7 +662,12 @@ def em1dfm_comparison(con, layer_table, steps):
 
 
 def run(
-    db_path: Path, out_dir: Path, fig_dir: Path, base: Settings | None = None, grid=None
+    db_path: Path,
+    out_dir: Path,
+    fig_dir: Path,
+    base: Settings | None = None,
+    grid: dict | None = None,
+    select: bool = True,
 ) -> dict:
     import time
 
@@ -697,17 +705,21 @@ def run(
     print(f"\n3. Channel gains on line {SELECTION_LINE} ({time.perf_counter() - t0:.0f} s):")
     print(pd.DataFrame(gain_history, columns=CHANNEL_COLS).round(3).to_string())
     sel = replace(sel, d_obs=sel.d_obs / gains)
-    t0 = time.perf_counter()
-    table = select_settings(sel, stats, quick, grid or GRID)
-    best = table.iloc[0][list(grid or GRID)].to_dict()
-    noise = select_settings(sel, stats, replace(quick, **best), NOISE_GRID)
-    settings = replace(base, **best, **noise.iloc[0][list(NOISE_GRID)].to_dict())
-    print(
-        f"\n4. Settings by marginal likelihood on line {SELECTION_LINE} "
-        f"({len(table) + len(noise)} runs, {time.perf_counter() - t0:.0f} s); top 8:"
-    )
-    print(table.head(8).round(3).to_string(index=False))
-    print(noise.round(3).to_string(index=False))
+    if select:
+        t0 = time.perf_counter()
+        table = select_settings(sel, stats, quick, grid or GRID)
+        best = table.iloc[0][list(grid or GRID)].to_dict()
+        noise = select_settings(sel, stats, replace(quick, **best), NOISE_GRID)
+        settings = replace(base, **best, **noise.iloc[0][list(NOISE_GRID)].to_dict())
+        print(
+            f"\n4. Settings by marginal likelihood on line {SELECTION_LINE} "
+            f"({len(table) + len(noise)} runs, {time.perf_counter() - t0:.0f} s); top 8:"
+        )
+        print(table.head(8).round(3).to_string(index=False))
+        print(noise.round(3).to_string(index=False))
+    else:
+        settings = base
+        print("\n4. Settings given, not searched")
     prior = build_prior(stats, settings)
     print(f"   chosen: {settings}")
     print("   prior: " + ", ".join(f"{k} {v:.3g}" for k, v in prior.info.items()))
@@ -760,6 +772,7 @@ def run(
     ]  # fmt: skip
     print(f"\n8. Depth to conductor at the {len(holes)} boreholes within 100 m (inf = none):")
     print(holes[cols].round(1).to_string(index=False))
+    holes.to_parquet(out_dir / "enki_boreholes.parquet")
     scores = depth_scores(holes, lay["top_m"].to_numpy())
     print(scores.round(2).to_string())
 

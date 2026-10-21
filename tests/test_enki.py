@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import pytest
 
 from morrill.analysis import enki, fdem
@@ -117,3 +118,12 @@ def test_a_buried_conductor_is_found_with_an_honest_interval():
     out = enki.invert_line(ld, prior, enki.Settings(n_ensemble=100), seed=0)["coupled"]
     assert np.all(out["depth_q10"] <= 31.8) and np.all(out["depth_q90"] >= 31.8)
     assert np.nanmedian(np.mean(out["residual"] ** 2, axis=1)) < 2.0
+
+
+def test_coverage_counts_the_layer_that_holds_the_true_depth():
+    tops = np.array([0.0, 0.86, 1.84, 2.94, 4.20, 5.62, 7.24])
+    truth = pd.Series([6.2, 3.7, 3.7, 0.6])
+    lo = pd.Series([5.62, 4.20, 5.62, 1.84])
+    # 6.2 m lies in 5.62-7.24; 3.7 m in 2.94-4.20 (reached by 4.20, not by 5.62);
+    # 0.6 m is shallower than any conductor can be, so 1.84 m is the best possible
+    assert enki.inside(truth, lo, lo, tops).tolist() == [True, True, False, True]
