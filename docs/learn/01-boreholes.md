@@ -12,8 +12,9 @@ Division (CSD). Names look like `1-F-96`: hole 1 of series F, drilled in 1996.
 
 | | Holes | Rows | Source file |
 |---|---|---|---|
-| Induction logs | 32 | 37,394 readings | `CSD_iresSelectMorrill.csv` |
+| Induction logs | 32 | 37,394 readings | `CSD_ires.csv` |
 | Driller's lithology | 130 | 1,173 intervals | `CSD_Lith.csv` |
+| Formation picks | 102 | 210 intervals | `CSD_strat.csv` |
 
 All 32 logged holes also have lithology; the other 98 have lithology only.
 
@@ -122,8 +123,8 @@ mineral surfaces, which lowers resistivity regardless of the water. So:
 - sand with **salty** water → low as well
 
 That last case is why the paper wanted pore-water specific conductivity: without
-it, salty sand and clay can look alike. The raw water-quality data is not in the
-Drive (see the README), so for now this ambiguity remains.
+it, salty sand and clay can look alike. The raw water-quality data hasn't been
+found (see [data sources](../data-sources.md)), so for now this ambiguity remains.
 
 ### What the logs actually show in this valley
 
@@ -190,7 +191,8 @@ Filter on coverage before trusting a layer value.
 ## Try it
 
 ```sql
--- Open the database:  uv run python -c "import duckdb; duckdb.connect('data/morrill.duckdb').sql('...').show()"
+-- Build first (uv run morrill build), then open the database:
+--   uv run python -c "import duckdb; duckdb.connect('data/morrill.duckdb').sql('...').show()"
 
 -- Holes with both logs and lithology
 SELECT hole_id, round(collar_elev_m, 1) AS collar FROM borehole

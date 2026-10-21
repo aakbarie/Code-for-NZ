@@ -20,19 +20,27 @@ the time.
 
 | Step | What | Status |
 |---|---|---|
-| 1 | A single, documented database of the survey, inversions, and borehole data | in progress |
+| 1 | A single, documented database of the survey, inversions, and borehole data | boreholes done; airborne survey and inversions waiting on the large files |
 | 2 | Resistivity from ML + statistics, validated by holding out whole boreholes, with calibrated uncertainty; benchmarked against the 2015 SOM results and MCMC | planned |
-| 3 | From resistivity to lithology, hydraulic properties, and a groundwater model | planned |
+| 3 | From resistivity to lithology, hydraulic conductivity, and a MODFLOW 6 groundwater model. Builds on the spatial-continuity approach of Friedel & Iwashita (2013): ML trend plus geostatistics on the residuals, tested on a synthetic aquifer with PEST++ pilot points | planned |
+| + | Network analysis: a similarity network of soundings (small-world structure, hydrostratigraphic communities) and a travel-time flow network of the 3D aquifer (connectivity, preferential paths) | planned |
+
+See [docs/learn/02](docs/learn/02-continuity-connectivity-networks.md) for the
+reasoning behind Steps 3 and +.
 
 ## Data
 
 Raw data is **not** stored in git. It lives in Google Drive, and
 [`manifests/raw_files.csv`](manifests/raw_files.csv) lists every input file
-with its Drive location and SHA-256 checksum. Download the files into
-`data/raw/` (keeping the paths in the manifest), then check them:
+with its Drive location and checksum.
+[docs/data-sources.md](docs/data-sources.md) explains what each file is,
+coordinate systems and units, known data problems, and what is still missing.
+
+Download the files into `data/raw/` (keeping the paths in the manifest), then:
 
 ```bash
-uv run morrill verify-raw
+uv run morrill verify-raw   # which files are present, missing, or the wrong version
+uv run morrill build        # build data/morrill.duckdb and run the data checks
 ```
 
 ## Layout

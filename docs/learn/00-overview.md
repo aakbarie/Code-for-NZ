@@ -50,8 +50,12 @@ helicopter EM survey ──► resistivity of the ground ──► rock type ─
 | Inversions (EM1DFM, MCMC, 2015 SOM) | Resistivity in 24 layers at each sounding | `model_run`, `model_resistivity` |
 | Borehole induction logs | Resistivity every 3 cm down a hole | `induction_log` |
 | Driller's lithology | Rock type by depth interval | `lithology`, `lithology_class` |
+| Formation picks | Geologic unit by depth; base of the aquifer | `stratigraphy`, `aquifer_base` |
 
 ## Notes in this folder
 
 - [01 · Boreholes](01-boreholes.md): induction logs, lithology, and how they become ground truth.
+- [02 · Continuity, connectivity, and networks](02-continuity-connectivity-networks.md):
+  variograms, the 2013 hybrid approach and how to make it rigorous, why
+  connectivity matters for flow, and small-world network analysis.
 - More are added as each step is built.
