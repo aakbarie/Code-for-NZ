@@ -1,0 +1,5 @@
+Line,Sys,Ser,Grp,Frm,Mem,DH_From,DH_To,DH_East,DH_North,DH_RL,Mask
+1E-96,Quaternary,,,,,0,2,1000.0,2000.0,99.0,1
+1E-96,Tertiary,Oligocene,White River,Brule,Orella,2,5,1000.0,2000.0,96.5,1
+9-Z-99,Quaternary,,,,,0,4,9000.0,9000.0,198.0,1
+9-Z-99,Quaternary,,,,,4,4,9000.0,9000.0,196.0,1

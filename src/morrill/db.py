@@ -18,13 +18,28 @@ def create_schema(con: duckdb.DuckDBPyConnection) -> None:
     con.execute(resources.files("morrill").joinpath("schema.sql").read_text())
 
 
-def load_lithology_classes(con: duckdb.DuckDBPyConnection) -> None:
-    path = resources.files("morrill").joinpath("reference/lithology_classes.csv")
+def _reference_csv(name: str, **kwargs) -> pd.DataFrame:
+    path = resources.files("morrill").joinpath(f"reference/{name}")
     with resources.as_file(path) as csv_path:
-        classes = pd.read_csv(csv_path, dtype=str, keep_default_na=False)
+        return pd.read_csv(csv_path, **kwargs)
+
+
+def load_lithology_classes(con: duckdb.DuckDBPyConnection) -> None:
+    classes = _reference_csv("lithology_classes.csv", dtype=str, keep_default_na=False)
     classes["consolidated"] = classes["consolidated"].map({"true": True, "false": False, "": None})
     classes["note"] = classes["note"].replace("", None)
     insert_df(con, "lithology_class", classes)
+
+
+def load_hem_channels(con: duckdb.DuckDBPyConnection) -> None:
+    # Frequencies and coil separations: hemSystem.txt from Burke's/New 07.16, which
+    # matches Fugro report 08035. Noise: assumed data errors from the 2015 paper, Table 1.
+    insert_df(con, "hem_channel", _reference_csv("hem_channels.csv"))
+
+
+def load_reference(con: duckdb.DuckDBPyConnection) -> None:
+    load_lithology_classes(con)
+    load_hem_channels(con)
 
 
 def register_source(

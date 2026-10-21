@@ -55,12 +55,18 @@ def sha256_of(path: Path, chunk: int = 1 << 20) -> str:
 
 
 def check(entry: RawFile, raw_dir: Path = RAW_DIR) -> str:
-    """Return 'ok', 'missing', 'wrong size', or 'wrong checksum'."""
+    """Return 'ok', 'ok (size only)', 'missing', 'wrong size', or 'wrong checksum'.
+
+    'ok (size only)': the manifest has no checksum yet for this file (it has
+    never been downloaded where one could be computed), but the size matches.
+    """
     path = raw_dir / entry.local_path
     if not path.exists():
         return "missing"
     if path.stat().st_size != entry.size_bytes:
         return "wrong size"
+    if not entry.sha256:
+        return "ok (size only)"
     if sha256_of(path) != entry.sha256:
         return "wrong checksum"
     return "ok"
@@ -71,7 +77,7 @@ def verify(raw_dir: Path = RAW_DIR, manifest: Path = MANIFEST_PATH) -> bool:
     n_ok = 0
     for entry in entries:
         status = check(entry, raw_dir)
-        n_ok += status == "ok"
+        n_ok += status.startswith("ok")
         print(f"{status:>15}  {entry.local_path}")
         if status != "ok":
             print(f"{'':>15}  get it from: {entry.drive_path}")

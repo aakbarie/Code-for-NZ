@@ -1,0 +1,7 @@
+channel,coil_orientation,freq_nominal_hz,freq_hz,coil_sep_m,noise_ppm
+CP400,coplanar,400,378,7.93,5
+CP1800,coplanar,1800,1776,7.91,10
+CX3300,coaxial,3300,3345,9.03,10
+CP8200,coplanar,8200,8171,7.91,10
+CP40K,coplanar,40000,41020,7.91,20
+CP140K,coplanar,140000,129550,7.89,40

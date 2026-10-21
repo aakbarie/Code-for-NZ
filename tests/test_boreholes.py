@@ -37,10 +37,19 @@ def test_build_boreholes_merges_spellings():
 
     assert len(holes) == 3
     assert holes.loc["1E96", "hole_id"] == "1E-96"
-    # collar elevation comes from the log (sample elevation + depth), not the lithology
+    # log: reading elevation + depth; lithology: mid-interval elevation + mid depth.
+    # Both give the same collar, so the spread is zero.
     assert holes.loc["1E96", "collar_elev_m"] == pytest.approx(100.0)
+    assert holes.loc["1E96", "collar_spread_m"] == pytest.approx(0.0)
+    assert holes.loc["9Z99", "collar_elev_m"] == pytest.approx(200.0)
     assert holes.loc["1F96", ["has_induction_log", "has_lithology"]].tolist() == [True, True]
     assert holes.loc["9Z99", ["has_induction_log", "has_lithology"]].tolist() == [False, True]
+
+
+def test_lithology_elevation_is_taken_at_mid_interval():
+    lith = boreholes.read_lithology(FIXTURES / "lithology.csv")
+    # 1E-96 rows: 0-2 m at 99.0 and 2-5 m at 96.5 both imply a 100.0 m collar
+    assert lith.loc[lith["hole_id"] == "1E-96", "collar_elev_m"].tolist() == [100.0, 100.0]
 
 
 def test_build_boreholes_refuses_to_merge_distant_holes():
@@ -55,7 +64,7 @@ def test_unexpected_mask_value_stops_the_load(tmp_path):
     text = (
         (FIXTURES / "lithology.csv")
         .read_text()
-        .replace("Clay,None,9000.0,9000.0,200.0,1", "Clay,None,9000.0,9000.0,200.0,0")
+        .replace("Clay,None,9000.0,9000.0,198.0,1", "Clay,None,9000.0,9000.0,198.0,0")
     )
     (tmp_path / "lith.csv").write_text(text)
     with pytest.raises(ValueError, match="Mask"):
@@ -76,6 +85,7 @@ def test_load_into_database(con):
     counts = boreholes.load(con, FIXTURES, "induction_log.csv", "lithology.csv")
     assert counts == {
         "induction_log_skipped": 1,
+        "lithology_skipped": 0,
         "borehole": 3,
         "induction_log": 5,
         "lithology": 4,
@@ -103,6 +113,21 @@ def test_low_conductivity_flagged_unreliable(con):
         "SELECT hole_id, depth_m FROM induction_log_clean WHERE NOT reliable"
     ).fetchall()
     assert unreliable == [("1-F-96", 2.0)]
+
+
+def test_aquifer_base_from_stratigraphy(con):
+    counts = boreholes.load(con, FIXTURES, "induction_log.csv", "lithology.csv", "stratigraphy.csv")
+    assert counts["stratigraphy"] == 3
+    assert counts["stratigraphy_skipped"] == 1  # the zero-length 4-4 m interval
+    rows = con.sql(
+        "SELECT hole_id, bedrock_depth_m, bedrock_elev_m, bedrock_unit, reached_bedrock, "
+        "hole_depth_m FROM aquifer_base ORDER BY hole_id"
+    ).fetchall()
+    assert rows == [
+        ("1E-96", 2.0, pytest.approx(98.0), "Brule", True, 5.0),
+        # never left the Quaternary: the base is somewhere below 4 m
+        ("9-Z-99", None, None, None, False, 4.0),
+    ]
 
 
 def test_every_lithology_label_has_a_class(con):

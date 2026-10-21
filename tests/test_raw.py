@@ -46,3 +46,13 @@ def test_verify_passes_when_everything_matches(tmp_path):
         [("f.txt", "ID", "p", 5, hashlib.sha256(b"hello").hexdigest(), "test", "")],
     )
     assert raw.verify(raw_dir, manifest) is True
+
+
+def test_entry_without_checksum_is_checked_by_size(tmp_path, capsys):
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+    (raw_dir / "big.csv").write_bytes(b"12345")
+    manifest = tmp_path / "raw_files.csv"
+    write_manifest(manifest, [("big.csv", "ID", "p", 5, "", "test", "")])
+    assert raw.verify(raw_dir, manifest) is True
+    assert "ok (size only)  big.csv" in capsys.readouterr().out

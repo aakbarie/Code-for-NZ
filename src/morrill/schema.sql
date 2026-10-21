@@ -1,9 +1,11 @@
 -- Morrill block database.
 --
 -- Conventions used in every table:
---   x, y            UTM zone 13N easting / northing, metres
+--   x, y            NAD83 / UTM zone 13N (EPSG:26913) easting / northing, metres
 --   depth (_m)      metres below ground surface, positive down
---   elevation (_m)  metres above sea level
+--   elevation (_m)  metres above sea level (orthometric). The Fugro survey delivered
+--                   heights above the ellipsoid, about 15 m lower; the airborne
+--                   loader must convert them before they go in.
 --   resistivity     ohm·m;  conductivity  mS/m  (resistivity = 1000 / conductivity)
 -- Every loaded row can be traced to the raw file it came from (source_file).
 
@@ -22,9 +24,11 @@ CREATE TABLE borehole (
     match_key         VARCHAR NOT NULL UNIQUE,-- name without dashes; matches spellings across files
     x                 DOUBLE NOT NULL,
     y                 DOUBLE NOT NULL,
-    collar_elev_m     DOUBLE,                 -- ground elevation at the hole
+    collar_elev_m     DOUBLE,                 -- ground elevation at the hole (NAVD88, presumably)
+    collar_spread_m   DOUBLE,                 -- disagreement between the files' collar elevations
     has_induction_log BOOLEAN NOT NULL,
-    has_lithology     BOOLEAN NOT NULL
+    has_lithology     BOOLEAN NOT NULL,
+    has_stratigraphy  BOOLEAN NOT NULL
 );
 
 -- Downhole induction logs, sampled every 0.1 ft (0.03048 m).
@@ -45,6 +49,21 @@ CREATE TABLE lithology (
     to_m       DOUBLE NOT NULL,
     rock_raw   VARCHAR NOT NULL,  -- label as delivered (cut off at 16 characters)
     drill_note VARCHAR,           -- e.g. 'Fast drill', 'Rig chatter'
+    source_id  VARCHAR NOT NULL REFERENCES source_file (source_id),
+    PRIMARY KEY (hole_id, from_m),
+    CHECK (to_m > from_m)
+);
+
+-- Geologic units picked in each hole, from the youngest (top) down.
+CREATE TABLE stratigraphy (
+    hole_id    VARCHAR NOT NULL REFERENCES borehole (hole_id),
+    from_m     DOUBLE NOT NULL CHECK (from_m >= 0),
+    to_m       DOUBLE NOT NULL,
+    system     VARCHAR NOT NULL,  -- Quaternary | Tertiary | Cretaceous
+    series     VARCHAR,           -- Oligocene, Eocene, Miocene, ...
+    group_name VARCHAR,           -- White River, Ogallala, Montana
+    formation  VARCHAR,           -- Brule, Chadron, Ash Hollow, Pierre
+    member     VARCHAR,           -- Orella, Whitney, ...
     source_id  VARCHAR NOT NULL REFERENCES source_file (source_id),
     PRIMARY KEY (hole_id, from_m),
     CHECK (to_m > from_m)
@@ -180,6 +199,26 @@ JOIN model_layer AS m
  AND (m.bottom_m IS NULL OR l.depth_m < m.bottom_m)
 WHERE m.thickness_m IS NOT NULL
 GROUP BY l.hole_id, m.layer, m.thickness_m;
+
+-- Base of the surficial aquifer at each hole: the top of the first unit older than
+-- the Quaternary (bedrock). A hole that never left the Quaternary only tells us the
+-- base is deeper than the hole ("censored"): bedrock_depth_m is NULL there and the
+-- base lies somewhere below hole_depth_m.
+CREATE VIEW aquifer_base AS
+SELECT
+    b.hole_id,
+    b.x,
+    b.y,
+    b.collar_elev_m,
+    min(s.from_m) FILTER (WHERE s.system <> 'Quaternary')                 AS bedrock_depth_m,
+    b.collar_elev_m - min(s.from_m) FILTER (WHERE s.system <> 'Quaternary') AS bedrock_elev_m,
+    arg_min(coalesce(s.formation, s.group_name, s.system), s.from_m)
+        FILTER (WHERE s.system <> 'Quaternary')                            AS bedrock_unit,
+    bool_or(s.system <> 'Quaternary')                                      AS reached_bedrock,
+    max(s.to_m)                                                            AS hole_depth_m
+FROM borehole AS b
+JOIN stratigraphy AS s USING (hole_id)
+GROUP BY b.hole_id, b.x, b.y, b.collar_elev_m;
 
 -- Lithology intervals with their hydrogeologic class.
 CREATE VIEW lithology_classified AS
