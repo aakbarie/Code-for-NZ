@@ -1,0 +1,40 @@
+rock_raw,rock_full,texture,consolidated,aquifer_role,note
+Sand,Sand,sand,false,aquifer,
+Gravel,Gravel,gravel,false,aquifer,
+Sand and gravel,Sand and gravel,sand_gravel,false,aquifer,
+Gravel and sand,Gravel and sand,sand_gravel,false,aquifer,
+Lithic gravel,Lithic gravel,gravel,false,aquifer,
+Sand and some gr,Sand and some gravel,sand,false,aquifer,
+Sand and silt,Sand and silt,silty_sand,false,aquifer,sand listed first so taken as sand-dominated; lower permeability than clean sand
+Silty sand to sa,Silty sand to sand,silty_sand,false,aquifer,ending of the label is a guess
+Sand to sandston,Sand to sandstone,sand,,aquifer,grades into bedrock
+Silt and sand,Silt and sand,silty_sand,false,confining,silt listed first so taken as silt-dominated
+Sandy silt,Sandy silt,silt,false,confining,
+Silt,Silt,silt,false,confining,
+Silt to siltston,Silt to siltstone,silt,,confining,grades into bedrock
+Clay,Clay,clay,false,confining,
+Mud,Mud,clay,false,confining,
+Clay and silt,Clay and silt,clay,false,confining,
+Clay and gravel,Clay and gravel,clay,false,confining,poorly sorted; assumes the clay matrix controls flow (guess)
+Clay to clayston,Clay to claystone,clay,,confining,grades into bedrock
+Clay and claysto,Clay and claystone,clay,,confining,grades into bedrock
+Siltstone,Siltstone,mudrock,true,confining,
+Claystone,Claystone,mudrock,true,confining,
+Mudstone,Mudstone,mudrock,true,confining,
+Shale,Shale,mudrock,true,confining,
+Clay shale,Clay shale,mudrock,true,confining,
+Siltstone-mudsto,Siltstone-mudstone,mudrock,true,confining,
+Mudstone-siltsto,Mudstone-siltstone,mudrock,true,confining,
+Siltstone to cla,Siltstone to claystone,mudrock,true,confining,
+Siltstone-sandst,Siltstone-sandstone,mudrock,true,confining,mixed; sandstone parts may carry water
+Siltstone to san,Siltstone to sandstone,mudrock,true,confining,mixed; sandstone parts may carry water
+Brule,Brule Formation (siltstone),mudrock,true,confining,White River Group siltstone; fractured Brule yields water locally
+Sandstone,Sandstone,sandstone,true,aquifer,
+Volcanic ash,Volcanic ash,ash,,confining,fine-grained ash beds of the White River Group
+Ash,Ash,ash,,confining,
+Top soil,Top soil,soil,false,unknown,
+Soil,Soil,soil,false,unknown,
+Roadfill and soi,Roadfill and soil,fill,false,unknown,
+Road fill,Road fill,fill,false,unknown,
+Mixed sample,Mixed sample,unknown,,unknown,
+No sample,No sample,unknown,,unknown,

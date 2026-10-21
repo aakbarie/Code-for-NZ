@@ -1,0 +1,5 @@
+Line,DH_From,DH_To,ROCK,Notes,DH_East,DH_North,DH_RL,Mask
+1E-96,0,2,Sand and gravel,None,1000.0,2000.0,100.3,1
+1E-96,2,5,Brule,Fast drill,1000.0,2000.0,98.3,1
+1-F-96,0,3,Silt to siltston,None,5000.2,6000.1,150.0,1
+9-Z-99,0,4,Clay,None,9000.0,9000.0,200.0,1

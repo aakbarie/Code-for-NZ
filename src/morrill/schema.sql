@@ -1,0 +1,190 @@
+-- Morrill block database.
+--
+-- Conventions used in every table:
+--   x, y            UTM zone 13N easting / northing, metres
+--   depth (_m)      metres below ground surface, positive down
+--   elevation (_m)  metres above sea level
+--   resistivity     ohm·m;  conductivity  mS/m  (resistivity = 1000 / conductivity)
+-- Every loaded row can be traced to the raw file it came from (source_file).
+
+CREATE TABLE source_file (
+    source_id   VARCHAR PRIMARY KEY,   -- short name used by the loaders
+    local_path  VARCHAR NOT NULL,      -- relative to data/raw
+    sha256      VARCHAR NOT NULL,
+    description VARCHAR
+);
+
+-- ---------------------------------------------------------------- boreholes
+
+-- Nebraska Conservation and Survey Division (CSD) test holes.
+CREATE TABLE borehole (
+    hole_id           VARCHAR PRIMARY KEY,    -- CSD name, e.g. '1-F-96'
+    match_key         VARCHAR NOT NULL UNIQUE,-- name without dashes; matches spellings across files
+    x                 DOUBLE NOT NULL,
+    y                 DOUBLE NOT NULL,
+    collar_elev_m     DOUBLE,                 -- ground elevation at the hole
+    has_induction_log BOOLEAN NOT NULL,
+    has_lithology     BOOLEAN NOT NULL
+);
+
+-- Downhole induction logs, sampled every 0.1 ft (0.03048 m).
+CREATE TABLE induction_log (
+    hole_id               VARCHAR NOT NULL REFERENCES borehole (hole_id),
+    depth_m               DOUBLE NOT NULL CHECK (depth_m >= 0),
+    conductivity_ms_m     DOUBLE NOT NULL CHECK (conductivity_ms_m > 0),  -- what the tool measures
+    resistivity_raw_ohm_m DOUBLE,   -- RES_ column as delivered; ~2% of rows disagree with 1000/conductivity
+    las_file              VARCHAR,  -- name of the original LAS log file
+    source_id             VARCHAR NOT NULL REFERENCES source_file (source_id),
+    PRIMARY KEY (hole_id, depth_m)
+);
+
+-- Driller's lithology descriptions, as depth intervals.
+CREATE TABLE lithology (
+    hole_id    VARCHAR NOT NULL REFERENCES borehole (hole_id),
+    from_m     DOUBLE NOT NULL CHECK (from_m >= 0),
+    to_m       DOUBLE NOT NULL,
+    rock_raw   VARCHAR NOT NULL,  -- label as delivered (cut off at 16 characters)
+    drill_note VARCHAR,           -- e.g. 'Fast drill', 'Rig chatter'
+    source_id  VARCHAR NOT NULL REFERENCES source_file (source_id),
+    PRIMARY KEY (hole_id, from_m),
+    CHECK (to_m > from_m)
+);
+
+-- Reference table: what each driller's label means for hydrogeology.
+-- Loaded from src/morrill/reference/lithology_classes.csv; edit that file to change it.
+CREATE TABLE lithology_class (
+    rock_raw     VARCHAR PRIMARY KEY,
+    rock_full    VARCHAR NOT NULL,  -- label without the 16-character cut-off
+    texture      VARCHAR NOT NULL CHECK (texture IN (
+                     'clay', 'silt', 'silty_sand', 'sand', 'sand_gravel', 'gravel',
+                     'mudrock', 'sandstone', 'ash', 'soil', 'fill', 'unknown')),
+    consolidated BOOLEAN,           -- bedrock (true) vs loose sediment (false); NULL = transitional
+    aquifer_role VARCHAR NOT NULL CHECK (aquifer_role IN ('aquifer', 'confining', 'unknown')),
+    note         VARCHAR
+);
+
+-- ---------------------------------------------------------------- airborne
+
+-- The six frequencies of the RESOLVE helicopter EM system.
+CREATE TABLE hem_channel (
+    channel          VARCHAR PRIMARY KEY,  -- e.g. 'CP400' (coplanar, 400 Hz)
+    coil_orientation VARCHAR NOT NULL CHECK (coil_orientation IN ('coplanar', 'coaxial')),
+    freq_nominal_hz  INTEGER NOT NULL,
+    freq_hz          DOUBLE NOT NULL,      -- calibrated frequency
+    coil_sep_m       DOUBLE NOT NULL,
+    noise_ppm        DOUBLE                -- assumed data error (paper Table 1)
+);
+
+-- One row per airborne sounding (one sample along a flight line).
+CREATE TABLE sounding (
+    sounding_id   INTEGER PRIMARY KEY,
+    line          INTEGER NOT NULL,
+    fid           DOUBLE NOT NULL,   -- fiducial (time stamp) along the line
+    x             DOUBLE NOT NULL,
+    y             DOUBLE NOT NULL,
+    ground_elev_m DOUBLE,            -- DTM
+    bird_height_m DOUBLE,            -- laser altimeter: sensor height above ground
+    source_id     VARCHAR NOT NULL REFERENCES source_file (source_id),
+    UNIQUE (line, fid)
+);
+
+-- The measured response at each sounding: in-phase (i) and quadrature (q), in ppm.
+CREATE TABLE hem_obs (
+    sounding_id INTEGER PRIMARY KEY REFERENCES sounding (sounding_id),
+    cp400_i   DOUBLE, cp400_q   DOUBLE,
+    cp1800_i  DOUBLE, cp1800_q  DOUBLE,
+    cx3300_i  DOUBLE, cx3300_q  DOUBLE,
+    cp8200_i  DOUBLE, cp8200_q  DOUBLE,
+    cp40k_i   DOUBLE, cp40k_q   DOUBLE,
+    cp140k_i  DOUBLE, cp140k_q  DOUBLE
+);
+
+-- ---------------------------------------------------------------- earth model
+
+-- The fixed 1D layering used by the inversions: 24 layers over a half-space.
+CREATE TABLE model_layer (
+    layer       INTEGER PRIMARY KEY CHECK (layer >= 1),  -- 1 = top
+    thickness_m DOUBLE,           -- NULL for the half-space
+    top_m       DOUBLE NOT NULL,
+    bottom_m    DOUBLE            -- NULL for the half-space
+);
+
+-- One row per way of producing a resistivity model (EM1DFM inversion, MCMC, 2015 SOM, ...).
+CREATE TABLE model_run (
+    run_id      VARCHAR PRIMARY KEY,
+    method      VARCHAR NOT NULL,
+    source_id   VARCHAR REFERENCES source_file (source_id),
+    description VARCHAR
+);
+
+-- Layer resistivities from each run, located by the run's own x, y.
+-- sounding_id links to the airborne sounding at the same place, when there is one.
+CREATE TABLE model_resistivity (
+    run_id            VARCHAR NOT NULL REFERENCES model_run (run_id),
+    location_id       INTEGER NOT NULL,  -- row number within the run
+    layer             INTEGER NOT NULL REFERENCES model_layer (layer),
+    x                 DOUBLE NOT NULL,
+    y                 DOUBLE NOT NULL,
+    sounding_id       INTEGER REFERENCES sounding (sounding_id),
+    resistivity_ohm_m DOUBLE CHECK (resistivity_ohm_m > 0),
+    PRIMARY KEY (run_id, location_id, layer)
+);
+
+-- ---------------------------------------------------------------- links
+
+-- Airborne soundings near each borehole (filled by the build, using a KD-tree).
+CREATE TABLE borehole_sounding (
+    hole_id     VARCHAR NOT NULL REFERENCES borehole (hole_id),
+    sounding_id INTEGER NOT NULL REFERENCES sounding (sounding_id),
+    distance_m  DOUBLE NOT NULL,
+    rank        INTEGER NOT NULL,   -- 1 = nearest
+    PRIMARY KEY (hole_id, sounding_id)
+);
+
+-- Results of the data checks run at the end of each build.
+CREATE TABLE qc_result (
+    check_name VARCHAR PRIMARY KEY,
+    passed     BOOLEAN NOT NULL,
+    detail     VARCHAR
+);
+
+-- ---------------------------------------------------------------- views
+
+-- Induction resistivity with a reliability flag. Below ~1 mS/m the tool is near
+-- its noise floor and the implied resistivity (>1000 ohm·m) can't be trusted.
+CREATE VIEW induction_log_clean AS
+SELECT
+    hole_id,
+    depth_m,
+    conductivity_ms_m,
+    1000.0 / conductivity_ms_m AS resistivity_ohm_m,
+    conductivity_ms_m >= 1.0   AS reliable
+FROM induction_log;
+
+-- Each induction log averaged over each model layer, so boreholes can be compared
+-- with airborne results layer by layer. Horizontal EM loops drive currents sideways
+-- through the layers, so the right average is the mean CONDUCTIVITY (conductances
+-- add in parallel). The naive mean of resistivity is kept to show the difference.
+CREATE VIEW borehole_layer_resistivity AS
+SELECT
+    l.hole_id,
+    m.layer,
+    count(*)                                    AS n_samples,
+    least(count(*) * 0.03048 / m.thickness_m, 1.0) AS coverage,  -- share of the layer the log covers
+    1000.0 / avg(l.conductivity_ms_m)           AS resistivity_ohm_m,
+    avg(1000.0 / l.conductivity_ms_m)           AS resistivity_naive_ohm_m,
+    bool_and(l.conductivity_ms_m >= 1.0)        AS all_reliable
+FROM induction_log AS l
+JOIN model_layer AS m
+  ON l.depth_m >= m.top_m
+ AND (m.bottom_m IS NULL OR l.depth_m < m.bottom_m)
+WHERE m.thickness_m IS NOT NULL
+GROUP BY l.hole_id, m.layer, m.thickness_m;
+
+-- Lithology intervals with their hydrogeologic class.
+CREATE VIEW lithology_classified AS
+SELECT
+    l.hole_id, l.from_m, l.to_m, l.to_m - l.from_m AS thickness_m,
+    l.rock_raw, c.rock_full, c.texture, c.consolidated, c.aquifer_role
+FROM lithology AS l
+LEFT JOIN lithology_class AS c USING (rock_raw);
