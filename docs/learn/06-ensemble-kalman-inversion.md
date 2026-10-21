@@ -353,9 +353,10 @@ speed up old MATLAB.
   and `mgd.m`.
 - It gives results identical to the last digit, so this reconstruction should
   match the server version closely.
-- Akbar also remembers shortening the burn-in from 10,000 iterations to
-  1,000. No surviving version has that change: all of them use the adaptive
-  rule above, so it couldn't be measured.
+- Akbar also changed the burn-in, from a fixed 10,000 iterations to stopping
+  as soon as convergence is detected. Every version in Drive already uses
+  the stop-on-detection rule, so the old fixed version isn't there to run.
+  What it was worth is measured below, from how fast real soundings converge.
 
 **How it was measured.**
 - The 2012 code from Drive was run in GNU Octave 8.4, on the same sounding,
@@ -386,9 +387,31 @@ reflection-coefficient file alone: 2,085 s for Burke's original against
 1,729 s (−17%), with burn-in identical at 37,453 iterations.
 
 - **Akbar's vectorisation of the whole code base cuts the run time by about
-  28%,** which bears out the "30% faster" he remembered.
+  28%.**
 - **The reflection-coefficient file** accounts for about 17–22% of that.
 - **The field calculations** and the random-draw helper account for the rest.
+
+**The burn-in: stop on detection, against a fixed 10,000.** How many
+iterations does a chain need before it first fits the data? This was
+measured on eight Morrill soundings spread along line 30050, each stopped
+as soon as burn-in was detected:
+
+| Sounding | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|
+| Burn-in iterations | 3,224 | 7,051 | 8,325 | 2,093 | 539 | 1,396 | 411 | 4,708 |
+
+- **All eight converge well before 10,000:** median 2,700 iterations, mean
+  3,500. That bears out the "about 1,000" Akbar remembered for many of them.
+- **Saving:** stopping on detection saves about 6,500 iterations per
+  sounding. With a 100,000-model chain, that is 110,000 iterations cut to
+  about 103,500, 6% fewer.
+- **Not always shorter:** the Alaskan test sounding needed 37,453, where a
+  fixed 10,000 would have stopped too early. A fixed count is either wasteful
+  or unsafe; detection is neither.
+
+**Both changes together:** 6% fewer iterations, each 28% cheaper, so about
+**32% less time per sounding**. That bears out the "30% faster" Akbar
+remembered.
 
 **About the copy in Drive.** The June 2012 snapshot of `calcrTEsens_v1.m`
 has a one-line slip in the sensitivity calculation: `Yn(:,:,2)` (the first
