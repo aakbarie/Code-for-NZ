@@ -317,7 +317,7 @@ line 10010, run on 11 July 2012. Its settings (`setUserParameters.m`) were:
 - the relative data error (5% to start) solved for;
 - bird height and calibration held fixed.
 
-| | Burke's MCMC (2012) | With Akbar's optimisation (30% faster) | EnKI (here) |
+| | Burke's MCMC (2012) | Optimised by Akbar (30% faster) | EnKI (here) |
 |---|---|---|---|
 | Forward models per sounding | 100,000 | 100,000 | 1,600 (400 members × 4 passes) |
 | Time per sounding | 1,425 s (23.8 min) | about 1,000 s (16.6 min)* | 0.67 core-seconds |
@@ -327,9 +327,8 @@ line 10010, run on 11 July 2012. Its settings (`setUserParameters.m`) were:
 \* "30% faster" read as 30% less run time. Read as 1.3 times the speed, it
 is 1,096 s per sounding, 90 days for the line and 2.5 years for the survey.
 
-- **Where the speed-up came from:** your optimisation made each MCMC step
-  cheaper. The ensemble needs fewer steps. The two gains multiply, so the
-  ensemble would run faster still on your optimised forward model.
+- **Two kinds of speed-up:** Akbar's optimisation made each MCMC step
+  cheaper, with the same 100,000 steps. The ensemble needs far fewer steps.
 - **Forward models:** the ensemble uses 62 times fewer.
 - **Wall time:** about 2,100 times less than the original code and about
   1,500 times less than the optimised one. Part of that gap is the machine:
