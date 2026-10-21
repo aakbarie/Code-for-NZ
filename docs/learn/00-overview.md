@@ -68,4 +68,7 @@ helicopter EM survey ──► resistivity of the ground ──► rock type ─
 - [05 · Kalman features](05-kalman-features.md): a state-space model along each
   flight line (Kalman filter, smoother, EM) that removes flight height and
   extracts smooth features from the raw channels on all ten lines.
+- [06 · Ensemble Kalman inversion](06-ensemble-kalman-inversion.md): a 1D EM
+  forward model written from the physics, and an ensemble Kalman filter and
+  smoother that invert every line with uncertainty, checked against boreholes.
 - More are added as each step is built.

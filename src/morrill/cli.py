@@ -24,6 +24,10 @@ def main(argv: list[str] | None = None) -> int:
         "kalman",
         help="state-space features along flight lines (needs: uv sync --extra analysis)",
     )
+    sub.add_parser(
+        "enki",
+        help="ensemble Kalman inversion of every line (needs: uv sync --extra analysis)",
+    )
 
     args = parser.parse_args(argv)
     if args.command == "verify-raw":
@@ -31,15 +35,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "build":
         build.build()
         return 0
-    if args.command in ("communities", "lithology", "kalman"):
+    if args.command in ("communities", "lithology", "kalman", "enki"):
         try:
-            from morrill.analysis import communities, kalman, lithology
+            from morrill.analysis import communities, enki, kalman, lithology
         except ImportError as err:
             print(f"{err}. Install the analysis extra: uv sync --extra analysis")
             return 1
-        analysis = {"communities": communities, "lithology": lithology, "kalman": kalman}[
-            args.command
-        ]
+        analysis = {
+            "communities": communities,
+            "lithology": lithology,
+            "kalman": kalman,
+            "enki": enki,
+        }[args.command]
         analysis.run(DB_PATH, DATA_DIR / "derived", REPO_ROOT / "docs" / "figures")
         return 0
     return 2

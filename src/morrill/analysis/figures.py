@@ -11,6 +11,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
 
@@ -184,8 +185,6 @@ def _rho_axis(ax) -> None:
 
 def lithology_histograms(model, log_hist: pd.DataFrame, path: Path) -> None:
     """Class likelihoods from the inversion, the same from the logs, and posteriors by depth."""
-    import numpy as np
-
     from morrill.analysis.lithology import BINS, CLASSES, DEPTH_BANDS
 
     centres = 10 ** ((BINS[:-1] + BINS[1:]) / 2)
@@ -234,7 +233,6 @@ def lithology_section(
 
     Returns the line number drawn.
     """
-    import numpy as np
     from matplotlib.colors import ListedColormap
     from matplotlib.patches import Rectangle
     from scipy.spatial import cKDTree
@@ -405,6 +403,201 @@ def kalman_line(
     fig.suptitle(
         f"Line {line} (never inverted): Kalman features from the raw channels, and the "
         "depth to conductor they predict", x=0.01, ha="left", fontsize=10,
+    )  # fmt: skip
+    fig.tight_layout(rect=(0, 0, 1, 0.98))
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+
+
+# --- ensemble Kalman inversion -------------------------------------------------------------
+
+ORANGE_RAMP = LinearSegmentedColormap.from_list(
+    "orange_seq", ["#fde5d9", "#f8b897", "#f28b5e", "#eb6834", "#c24e1f", "#8f3714", "#5f240c"]
+)
+RHO_TICKS = [3, 10, 30, 100, 300]
+RHO_LIMITS = (0.5, 2.5)  # log10 ohm·m
+
+
+def _wide(layer_table: pd.DataFrame, ids, col: str):
+    return layer_table.pivot(index="sounding_id", columns="layer", values=col).loc[ids].to_numpy()
+
+
+def _edges(v):
+    mid = (v[1:] + v[:-1]) / 2
+    return np.r_[v[0] - (mid[0] - v[0]), mid, v[-1] + (v[-1] - mid[-1])]
+
+
+def _section(ax, fig, along_km, grid, lay, cmap, vmin, vmax, label, rho=False):
+    depth_edges = np.r_[lay["top_m"].to_numpy()[:-1], 125.0]  # half-space not drawn
+    order = np.argsort(along_km)
+    mesh = ax.pcolormesh(
+        _edges(along_km[order]), depth_edges, grid[order][:, :-1].T, cmap=cmap,
+        vmin=vmin, vmax=vmax, shading="flat", rasterized=True,
+    )  # fmt: skip
+    ax.set_ylim(125, 0)
+    ax.set_ylabel("depth (m)")
+    cb = fig.colorbar(mesh, ax=ax, pad=0.01, fraction=0.025)
+    cb.set_label(label)
+    if rho:
+        cb.set_ticks(np.log10(RHO_TICKS), labels=[str(t) for t in RHO_TICKS])
+        cb.ax.invert_yaxis()
+    return mesh
+
+
+def _holes_on(ax, holes, line, along, label=True):
+    on = holes[holes["line"] == line]
+    for _, r in on.iterrows():
+        yy = along(r)
+        ax.plot([yy, yy], [0, r["bedrock_depth_m"]], color=INK, lw=0.8)
+        ax.scatter(
+            yy, r["bedrock_depth_m"], s=36, color=SURFACE, edgecolors=INK, linewidths=1.2, zorder=4
+        )
+        if label:
+            ax.annotate(
+                r["hole_id"], (yy, 0), xytext=(3, 3), textcoords="offset points",
+                fontsize=6, color=INK_2, va="bottom",
+            )  # fmt: skip
+
+
+def _tidy(axes):
+    for a in axes:
+        for side in ("top", "right"):
+            a.spines[side].set_visible(False)
+
+
+def enki_section(steps, layer_table, lay, holes, line, path: Path) -> None:
+    """One line: median resistivity, its uncertainty, depth to conductor, and the data fit."""
+    sel = steps[steps["line"] == line].reset_index(drop=True)
+    y = sel["y"].to_numpy() / 1000
+    ids = sel["sounding_id"].to_numpy()
+    pos = dict(zip(ids, y, strict=True))
+    along = lambda r: pos[r["sounding_id"]]  # noqa: E731
+    fig, axes = plt.subplots(
+        4, 1, figsize=(12, 11), sharex=True, gridspec_kw={"height_ratios": [2.2, 2.2, 2.2, 1]}
+    )
+    q50 = _wide(layer_table, ids, "q50")
+    width = _wide(layer_table, ids, "q90") - _wide(layer_table, ids, "q10")
+    _section(
+        axes[0], fig, y, q50, lay, BLUE_RAMP.reversed(), *RHO_LIMITS,
+        "median resistivity (ohm·m)\ndarker = more conductive", rho=True,
+    )  # fmt: skip
+    axes[0].plot(y, np.where(np.isinf(sel["depth_q50"]), np.nan, sel["depth_q50"]), color=SURFACE,
+                 lw=1.2, label="depth to conductor (median)")  # fmt: skip
+    _holes_on(axes[0], holes, line, along)
+    axes[0].legend(loc="lower left", fontsize=7, frameon=False, labelcolor=INK)
+    axes[0].set_title("Median of the ensemble", loc="left")
+    _section(axes[1], fig, y, width, lay, ORANGE_RAMP, 0, 1.2, "80% interval width\n(decades)")
+    _holes_on(axes[1], holes, line, along, label=False)
+    axes[1].set_title(
+        "Uncertainty: width of the 80% interval of log10 resistivity (1 = a factor of 10)",
+        loc="left",
+    )
+    ax = axes[2]
+    lo, hi = sel["depth_q10"].to_numpy(), np.minimum(sel["depth_q90"].to_numpy(), 125)
+    ax.fill_between(y, lo, hi, color=HIGHLIGHT, alpha=0.25, lw=0, label="along-line EnKI, 80%")
+    ax.plot(y, np.minimum(sel["depth_q50"], 125), color=HIGHLIGHT, lw=1.5, label="median")
+    on = holes[holes["line"] == line]
+    hy = np.array([along(r) for _, r in on.iterrows()])
+    if len(on):
+        ax.errorbar(
+            hy + 0.02, np.minimum(on["independent_q50"], 125),
+            yerr=[np.minimum(on["independent_q50"], 125) - on["independent_q10"],
+                  np.minimum(on["independent_q90"], 125) - np.minimum(on["independent_q50"], 125)],
+            fmt="s", ms=4, color=INK_2, lw=1, capsize=2, label="sounding on its own, 80%",
+        )  # fmt: skip
+        ax.scatter(
+            hy, on["bedrock_depth_m"], s=40, color=SURFACE, edgecolors=INK, linewidths=1.2,
+            zorder=4, label="borehole: depth to bedrock",
+        )  # fmt: skip
+    ax.set_ylim(125, 0)
+    ax.set_ylabel("depth to conductor (m)")
+    ax.legend(loc="lower left", fontsize=7, frameon=False, ncols=2)
+    ax.set_title("Depth to the first layer below 1.8 m under 20 ohm·m", loc="left")
+    ax = axes[3]
+    ax.plot(y, sel["misfit"], color=INK, lw=0.8)
+    ax.axhline(1, color=CONTEXT, lw=1)
+    ax.set_yscale("log")
+    ax.set_ylabel("data misfit\n(1 = to the error)")
+    ax.set_xlabel("northing (km, UTM 13N)")
+    _tidy(axes)
+    fig.suptitle(
+        f"Line {line}: ensemble Kalman inversion with a 1D EM forward model", x=0.01, ha="left",
+        fontsize=10,
+    )  # fmt: skip
+    fig.tight_layout(rect=(0, 0, 1, 0.98))
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+
+
+def enki_compare(steps, layer_table, em, lay, holes, line, path: Path) -> None:
+    """An inverted line: EM1DFM next to the EnKI median and its uncertainty."""
+    sel = steps[steps["line"] == line].reset_index(drop=True)
+    ids = sel["sounding_id"].to_numpy()
+    y = sel["y"].to_numpy() / 1000
+    pos = dict(zip(ids, y, strict=True))
+    along = lambda r: pos[r["sounding_id"]]  # noqa: E731
+    em_grid = em.pivot(index="sounding_id", columns="layer", values="em1dfm").loc[ids].to_numpy()
+    fig, axes = plt.subplots(3, 1, figsize=(12, 8.5), sharex=True)
+    label = "resistivity (ohm·m)\ndarker = more conductive"
+    _section(axes[0], fig, y, em_grid, lay, BLUE_RAMP.reversed(), *RHO_LIMITS, label, rho=True)
+    axes[0].set_title("EM1DFM (deterministic, each sounding on its own)", loc="left")
+    _section(
+        axes[1], fig, y, _wide(layer_table, ids, "q50"), lay, BLUE_RAMP.reversed(), *RHO_LIMITS,
+        label, rho=True,
+    )  # fmt: skip
+    axes[1].set_title("EnKI median (along-line ensemble Kalman inversion)", loc="left")
+    width = _wide(layer_table, ids, "q90") - _wide(layer_table, ids, "q10")
+    _section(axes[2], fig, y, width, lay, ORANGE_RAMP, 0, 1.2, "80% interval width\n(decades)")
+    axes[2].set_title("EnKI uncertainty: width of the 80% interval", loc="left")
+    for i, ax in enumerate(axes):
+        _holes_on(ax, holes, line, along, label=i == 0)
+    axes[-1].set_xlabel("northing (km, UTM 13N)")
+    _tidy(axes)
+    fig.suptitle(f"Line {line}: two inversions of the same data", x=0.01, ha="left", fontsize=10)
+    fig.tight_layout(rect=(0, 0, 1, 0.98))
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+
+
+def enki_depth_map(steps, bedrock, path: Path) -> None:
+    """Depth to conductor (median) and its 80% interval width, on every line."""
+    from matplotlib.lines import Line2D
+
+    vmax = 80
+    fig, axes = plt.subplots(1, 2, figsize=(10, 12.5), sharey=True)
+    depth = np.minimum(steps["depth_q50"], 125)
+    width = np.minimum(steps["depth_q90"], 125) - steps["depth_q10"]
+    for ax, values, cmap, top, label, title in (
+        (axes[0], depth, BLUE_RAMP, vmax, "depth (m)", "Depth to conductor, median"),
+        (axes[1], width, ORANGE_RAMP, 40, "80% interval width (m)", "Its uncertainty"),
+    ):
+        sc = ax.scatter(
+            steps["x"] / 1000, steps["y"] / 1000, s=7, c=np.clip(values, 0, top), cmap=cmap,
+            vmin=0, vmax=top, lw=0, rasterized=True,
+        )  # fmt: skip
+        _map_axes(ax, steps)
+        ax.set_xlabel("easting (km, UTM 13N)")
+        cb = fig.colorbar(sc, ax=ax, shrink=0.3, pad=0.02, extend="max")
+        cb.set_label(label)
+        if ax is axes[0]:
+            cb.ax.invert_yaxis()
+        ax.set_title(title, loc="left")
+    inside = bedrock[
+        bedrock["x"].between(steps["x"].min() - 300, steps["x"].max() + 300)
+        & bedrock["y"].between(steps["y"].min() - 300, steps["y"].max() + 300)
+    ]
+    axes[0].scatter(
+        inside["x"] / 1000, inside["y"] / 1000, s=42, c=inside["bedrock_depth_m"].clip(upper=vmax),
+        cmap=BLUE_RAMP, vmin=0, vmax=vmax, edgecolors=INK, linewidths=1.2, zorder=3,
+    )  # fmt: skip
+    handle = Line2D([], [], ls="", marker="o", ms=7, mfc="#86b6ef", mec=INK)
+    axes[0].legend(
+        [handle], ["borehole: depth to bedrock"], loc="lower left", fontsize=7, frameon=False
+    )
+    axes[0].set_ylabel("northing (km, UTM 13N)")
+    fig.suptitle(
+        "Ensemble Kalman inversion of all 12 lines (every 20th sounding)", x=0.01, ha="left",
+        fontsize=10,
     )  # fmt: skip
     fig.tight_layout(rect=(0, 0, 1, 0.98))
     fig.savefig(path, dpi=150)
