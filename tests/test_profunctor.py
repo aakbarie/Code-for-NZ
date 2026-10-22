@@ -172,3 +172,18 @@ def test_a_deep_sharp_contact_is_found_on_the_grid():
     assert np.all(out["depth_q10"] <= depth) and np.all(out["depth_q90"] >= depth)
     assert np.all(np.abs(out["depth_q50"] / depth - 1) < 0.25)
     assert out["members"].shape == (n, 20)
+
+
+def test_the_fast_linear_line_matches_the_log_space_chain():
+    rng = np.random.default_rng(6)
+    log_prior, kernels, liks = random_line(rng, n=6, k=5)
+    liks = liks * 30  # sharp likelihoods, to exercise the rescaling
+    log_post, evidence = profunctor.posterior(log_prior, kernels, liks)
+    line = profunctor.Line(log_prior, kernels)
+    fwd, bwd, ev = line.compose(liks)
+    np.testing.assert_allclose(line.marginals(fwd, bwd), np.exp(log_post), atol=1e-10)
+    assert ev == pytest.approx(evidence)
+    draws = np.array([line.sample(fwd, rng) for _ in range(20_000)]).T
+    for t in range(6):
+        freq = np.bincount(draws[t], minlength=5) / draws.shape[1]
+        np.testing.assert_allclose(freq, np.exp(log_post[t]), atol=0.015)

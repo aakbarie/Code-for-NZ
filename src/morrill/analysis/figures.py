@@ -817,3 +817,39 @@ def profunctor_map(steps, path: Path) -> None:
     fig.tight_layout(rect=(0, 0, 1, 0.98))
     fig.savefig(path, dpi=150)
     plt.close(fig)
+
+
+def field_lines(line_steps, field_steps, holes, lines, path: Path) -> None:
+    """Depth to bedrock along a line: each line alone (note 08), the 2D field, and each
+    validation hole predicted from every other hole (leave one out)."""
+    one_c, field_c = "#eb6834", HIGHLIGHT  # categorical slots 2 and 1
+    fig, axes = plt.subplots(len(lines), 1, figsize=(12, 4.0 * len(lines)))
+    for ax, line in zip(np.atleast_1d(axes), lines, strict=True):
+        a = line_steps[line_steps["line"] == line].sort_values("y")
+        b = field_steps[field_steps["line"] == line].sort_values("y")
+        ya, yb = a["y"] / 1000, b["y"] / 1000
+        ax.fill_between(yb, b["depth_q10"], b["depth_q90"], color=field_c, alpha=0.25, lw=0,
+                        label="2D field, 80%")  # fmt: skip
+        ax.plot(yb, b["depth_q50"], color=field_c, lw=1.3, label="2D field, median")
+        ax.plot(ya, a["depth_q50"], color=one_c, lw=1.0, ls="--",
+                label="line alone (note 08), median")  # fmt: skip
+        on = holes[holes["line"] == line]
+        if len(on):
+            yy = on["sounding_id"].map(dict(zip(b["sounding_id"], yb, strict=True)))
+            ax.errorbar(yy + 0.08, on["loo_depth_q50"],
+                        yerr=[on["loo_depth_q50"] - on["loo_depth_q10"],
+                              on["loo_depth_q90"] - on["loo_depth_q50"]],
+                        fmt="s", ms=4, color=INK_2, capsize=2, lw=1,
+                        label="predicted from every other hole, 80%")  # fmt: skip
+            ax.scatter(yy, on["bedrock_depth_m"], s=40, color=SURFACE, edgecolors=INK,
+                       linewidths=1.2, zorder=4, label="borehole: depth to bedrock")  # fmt: skip
+        ax.set_ylim(100, 0)
+        ax.set_ylabel("depth (m)")
+        ax.set_title(f"Line {line}: depth to bedrock, line alone against the 2D field",
+                     loc="left")  # fmt: skip
+        ax.legend(loc="lower left", fontsize=7, frameon=False, ncols=3)
+    np.atleast_1d(axes)[-1].set_xlabel("northing (km, UTM 13N)")
+    _tidy(np.atleast_1d(axes))
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)
+    plt.close(fig)

@@ -78,4 +78,9 @@ helicopter EM survey ──► resistivity of the ground ──► rock type ─
   earth on a grid of depths, composed exactly along each line in two
   semirings (probabilities and best paths). It is the most accurate so far, and
   shows note 07's two answers were an ensemble trap.
+- [09 · One surface, and boreholes as data](09-field-and-boreholes.md): lines
+  composed into one field by Gibbs sampling with whole lines as blocks;
+  boreholes 50 m apart differ by ±35% in depth, which explains most of the gap
+  between the EM's intervals and the boreholes; and where the chain toward
+  groundwater stops.
 - More are added as each step is built.

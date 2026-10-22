@@ -61,6 +61,57 @@ def chain(log_prior, log_kernels, log_liks, semiring: Semiring = SUM_PRODUCT):
     return fwd, bwd, float(semiring.add(fwd[-1], axis=0))
 
 
+class Line:
+    """A line's kernels held in linear space, for fast SUM_PRODUCT composition: one
+    k×k matrix-vector product per step, rescaled at every step so nothing underflows.
+    Same answers as chain(..., SUM_PRODUCT), many times faster in a loop."""
+
+    def __init__(self, log_prior, log_kernels):
+        self.log_scale = float(log_prior.max())
+        self.prior = np.exp(log_prior - self.log_scale)
+        self.T = np.exp(log_kernels)
+
+    def compose(self, log_liks, backward: bool = True):
+        """Scaled forward (and backward) messages, and the log evidence."""
+        n, k = log_liks.shape
+        top = log_liks.max(axis=1, keepdims=True)
+        lik = np.exp(log_liks - top)
+        fwd = np.empty((n, k))
+        c = np.empty(n)
+        a = self.prior * lik[0]
+        c[0] = a.sum()
+        fwd[0] = a / c[0]
+        for t in range(1, n):
+            a = (fwd[t - 1] @ self.T[t - 1]) * lik[t]
+            c[t] = a.sum()
+            fwd[t] = a / c[t]
+        evidence = float(np.log(c).sum() + top.sum() + self.log_scale)
+        if not backward:
+            return fwd, None, evidence
+        bwd = np.empty((n, k))
+        bwd[-1] = 1.0
+        for t in range(n - 2, -1, -1):
+            b = self.T[t] @ (lik[t + 1] * bwd[t + 1])
+            bwd[t] = b / b.sum()
+        return fwd, bwd, evidence
+
+    @staticmethod
+    def marginals(fwd, bwd) -> np.ndarray:
+        p = fwd * bwd
+        return p / p.sum(axis=1, keepdims=True)
+
+    def sample(self, fwd, rng) -> np.ndarray:
+        """One exact joint draw of the whole sequence (backward sampling)."""
+        n, k = fwd.shape
+        out = np.empty(n, dtype=int)
+        u = rng.random(n)
+        out[-1] = np.searchsorted(np.cumsum(fwd[-1]), u[-1] * fwd[-1].sum())
+        for t in range(n - 2, -1, -1):
+            w = np.cumsum(fwd[t] * self.T[t][:, out[t + 1]])
+            out[t] = np.searchsorted(w, u[t] * w[-1])
+        return np.minimum(out, k - 1)
+
+
 def posterior(log_prior, log_kernels, log_liks) -> tuple[np.ndarray, float]:
     """Log posterior at every step (n, k), and the log evidence."""
     fwd, bwd, evidence = chain(log_prior, log_kernels, log_liks, SUM_PRODUCT)

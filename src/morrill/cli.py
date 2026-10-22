@@ -37,6 +37,14 @@ def main(argv: list[str] | None = None) -> int:
         help="depth to bedrock on a grid, composed exactly along each line (run bedrock first)",
     )
     sub.add_parser(
+        "field",
+        help="the bedrock surface as one 2D field across lines, with boreholes as data",
+    )
+    sub.add_parser(
+        "coarse",
+        help="thickness of coarse sediment from the fill's resistivity (run field first)",
+    )
+    sub.add_parser(
         "aquifer",
         help="aquifer thickness and volume from the depth to bedrock (run bedrock first)",
     )
@@ -47,13 +55,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "build":
         build.build()
         return 0
-    commands = ("communities", "lithology", "kalman", "enki", "bedrock", "profunctor", "aquifer")
+    commands = (
+        "communities", "lithology", "kalman", "enki", "bedrock", "profunctor", "field", "coarse",
+        "aquifer",
+    )  # fmt: skip
     if args.command in commands:
         try:
             from morrill.analysis import (
                 aquifer,
                 bedrock,
+                bedrock_field,
                 bedrock_profunctor,
+                coarse,
                 communities,
                 enki,
                 kalman,
@@ -69,6 +82,8 @@ def main(argv: list[str] | None = None) -> int:
             "enki": enki,
             "bedrock": bedrock,
             "profunctor": bedrock_profunctor,
+            "field": bedrock_field,
+            "coarse": coarse,
             "aquifer": aquifer,
         }[args.command]
         analysis.run(DB_PATH, DATA_DIR / "derived", REPO_ROOT / "docs" / "figures")

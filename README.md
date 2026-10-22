@@ -51,6 +51,8 @@ uv run morrill kalman       # Kalman state-space features along every flight lin
 uv run morrill enki         # ensemble Kalman inversion of every line, with checks (~25 min)
 uv run morrill bedrock      # depth to bedrock as a sharp contact, with calibrated intervals (~5 min)
 uv run morrill profunctor   # depth to bedrock on a grid, composed exactly along each line (~7 min)
+uv run morrill field        # the bedrock surface as one 2D field, with boreholes as data (~10 min)
+uv run morrill coarse       # coarse sediment from the fill's resistivity (seconds)
 uv run morrill aquifer      # thickness and volume of aquifer material, by inversion (seconds)
 ```
 

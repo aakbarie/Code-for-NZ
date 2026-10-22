@@ -292,6 +292,9 @@ def run(db_path: Path, out_dir: Path, fig_dir: Path, settings: Settings | None =
         sounding_id=np.concatenate([ld.sounding_id for ld in lds]),
         log_L=np.concatenate([fits[ld.line][0] for ld in lds]),
         log_depth=depth_grid(settings),
+        # the fitted ψ and misfit at every grid depth, for links beyond the depth (coarse.py)
+        psi=np.concatenate([fits[ld.line][2] for ld in lds]).astype(np.float32),
+        misfit=np.concatenate([fits[ld.line][1] for ld in lds]).astype(np.float32),
     )
 
     table = select(lds, fits, prior, settings)
