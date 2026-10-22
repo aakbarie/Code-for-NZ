@@ -107,14 +107,16 @@ def volumes(table: pd.DataFrame, draws: dict, widths: pd.Series) -> pd.DataFrame
     return pd.DataFrame(out, index=["q10", "q50", "q90"]).T
 
 
-def run(db_path: Path, out_dir: Path, fig_dir: Path) -> dict:
+def run(db_path: Path, out_dir: Path, fig_dir: Path, source: str = "bedrock") -> dict:
+    """source: which inversion's surfaces to read ("bedrock" for note 07's ensemble,
+    "profunctor" for note 08's grid)."""
     from morrill.analysis import figures
 
     con = duckdb.connect(str(db_path), read_only=True)
-    steps = pd.read_parquet(out_dir / "bedrock_soundings.parquet")
-    saved = np.load(out_dir / "bedrock_members.npz")
+    steps = pd.read_parquet(out_dir / f"{source}_soundings.parquet")
+    saved = np.load(out_dir / f"{source}_members.npz")
     assert np.array_equal(saved["sounding_id"], steps["sounding_id"].to_numpy())
-    calib = pd.read_parquet(out_dir / "bedrock_calibration.parquet")
+    calib = pd.read_parquet(out_dir / f"{source}_calibration.parquet")
     k = bedrock.inflation(calib["score"].to_numpy())
     smooth = (
         pd.read_parquet(out_dir / "enki_soundings.parquet")
@@ -131,7 +133,8 @@ def run(db_path: Path, out_dir: Path, fig_dir: Path) -> dict:
     print(table.round(1).to_string(index=False))
     print("\nVolume of aquifer material under the ten lines' strips (km³):")
     print(vol.round(3).to_string())
-    table.to_parquet(out_dir / "aquifer_thickness.parquet")
+    suffix = "" if source == "bedrock" else f"_{source}"
+    table.to_parquet(out_dir / f"aquifer_thickness{suffix}.parquet")
     fig_dir.mkdir(parents=True, exist_ok=True)
-    figures.aquifer_thickness(table, fig_dir / "aquifer_thickness.png")
+    figures.aquifer_thickness(table, fig_dir / f"aquifer_thickness{suffix}.png")
     return {"table": table, "volumes": vol, "k": k}

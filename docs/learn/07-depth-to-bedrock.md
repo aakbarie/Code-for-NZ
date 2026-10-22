@@ -87,6 +87,14 @@ up.**
 
 ### One ensemble keeps one answer: three starts, pooled
 
+> **Correction, from note 08.** The grid inversion of note 08 evaluates every
+> depth at every sounding. On line 30090 it gives the deep contact a
+> probability of 10⁻⁵ or less. The data there don't allow two answers: the
+> deep one is a trap the Gaussian update falls into and can't leave, and the
+> seed decides whether it falls in. Read "two answers" below as "two places an
+> ensemble can settle". The volume gap between inversions is also mostly that
+> trap: 10%, not 27–37%.
+
 With a single ensemble, the result on some stretches of line depends on the
 random seed. Three runs with different seeds (one start each, 400 members):
 
@@ -272,15 +280,17 @@ width](../figures/bedrock_depth.png)
 - **A valley floor 5–11 m deeper** than the smooth model's, from asking for
   the depth directly. The error at the two valley holes falls from 21 m to
   13 m, and it is the same in every run.
-- **A lesson about ensembles:** where the data allow two answers, one
-  Gaussian ensemble keeps one, chosen by its seed. Pooling independent starts
-  keeps more of them, at a cost of one run per start.
+- **A lesson about ensembles:** a Gaussian ensemble can settle in a place the
+  data don't support, and its seed decides whether it does. Pooling
+  independent starts shows the problem but doesn't cure it; note 08's exact
+  grid does.
 - **A lesson about intervals:** a rigid model fits its data with false
   confidence. Boreholes the checks never use can measure that, and a single
   factor corrects it.
 - **A number a water manager would use,** the volume of aquifer material.
-  The choice of inversion moves it by a quarter to a third, and no single
-  model's interval shows that.
+  Here the choice of inversion seemed to move it by a quarter to a third.
+  Note 08 shows most of that was the ensemble's trap: with exact inference
+  the gap is 10%.
 
 ## Questions to think about
 

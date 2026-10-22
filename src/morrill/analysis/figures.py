@@ -737,3 +737,83 @@ def aquifer_thickness(table, path: Path) -> None:
     fig.tight_layout()
     fig.savefig(path, dpi=150)
     plt.close(fig)
+
+
+def profunctor_lines(steps, log_post, log_depth, ens_steps, holes, lines, path: Path) -> None:
+    """The grid posterior of the depth to bedrock along each line, against note 07's ensemble."""
+    ens_c = "#eb6834"  # categorical slot 2, as in aquifer_thickness
+    dx = log_depth[1] - log_depth[0]
+    z_edges = 10.0 ** np.r_[log_depth - dx / 2, log_depth[-1] + dx / 2]
+    fig, axes = plt.subplots(len(lines), 1, figsize=(12, 4.2 * len(lines)))
+    for ax, line in zip(np.atleast_1d(axes), lines, strict=True):
+        rows = np.flatnonzero(steps["line"].to_numpy() == line)
+        rows = rows[np.argsort(steps["y"].to_numpy()[rows])]
+        sel = steps.iloc[rows]
+        y = sel["y"].to_numpy() / 1000
+        y_edges = np.r_[y[0] - (y[1] - y[0]) / 2, (y[1:] + y[:-1]) / 2, y[-1] + (y[-1] - y[-2]) / 2]
+        p = np.exp(log_post[rows].astype(float))
+        p /= p.max(axis=1, keepdims=True)
+        mesh = ax.pcolormesh(y_edges, z_edges, p.T, cmap=BLUE_RAMP, vmin=0, vmax=1,
+                             shading="flat", rasterized=True)  # fmt: skip
+        from matplotlib import patheffects
+
+        ax.plot(y, sel["depth_best"], color=SURFACE, lw=1.0,
+                path_effects=[patheffects.withStroke(linewidth=2.2, foreground=INK)],
+                label="most probable surface (max-plus)")  # fmt: skip
+        if ens_steps is not None:
+            e = ens_steps[ens_steps["line"] == line].sort_values("y")
+            for c, lab in (("depth_q10", "note 07 ensemble, 80%"), ("depth_q90", None)):
+                ax.plot(e["y"] / 1000, e[c], color=ens_c, lw=1.1, ls="--", label=lab)
+        on = holes[holes["line"] == line]
+        pos = dict(zip(sel["sounding_id"], y, strict=True))
+        if len(on):
+            ax.scatter([pos[s] for s in on["sounding_id"]], on["bedrock_depth_m"], s=40,
+                       color=SURFACE, edgecolors=INK, linewidths=1.2, zorder=4,
+                       label="borehole: depth to bedrock")  # fmt: skip
+        ax.set_ylim(100, 0)
+        ax.set_ylabel("depth (m)")
+        ax.set_title(f"Line {line}: probability of the depth to bedrock at each sounding "
+                     "(darkest = most probable)", loc="left")  # fmt: skip
+        ax.legend(loc="lower left", fontsize=7, frameon=True, framealpha=0.85, ncols=3)
+        cb = fig.colorbar(mesh, ax=ax, pad=0.01, shrink=0.8)
+        cb.set_label("probability, relative to\nthe sounding's peak")
+    np.atleast_1d(axes)[-1].set_xlabel("northing (km, UTM 13N)")
+    _tidy(np.atleast_1d(axes))
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+
+
+def profunctor_map(steps, path: Path) -> None:
+    """Median depth to bedrock, and where the data allow two or more answers."""
+    from matplotlib.lines import Line2D
+
+    two_c = "#eb6834"
+    fig, axes = plt.subplots(1, 2, figsize=(10, 12.5), sharey=True)
+    sc = axes[0].scatter(steps["x"] / 1000, steps["y"] / 1000, s=7,
+                         c=np.clip(steps["depth_q50"], 0, 80), cmap=BLUE_RAMP, vmin=0, vmax=80,
+                         lw=0, rasterized=True)  # fmt: skip
+    cb = fig.colorbar(sc, ax=axes[0], shrink=0.3, pad=0.02, extend="max")
+    cb.set_label("depth (m)")
+    cb.ax.invert_yaxis()
+    axes[0].set_title("Depth to bedrock, posterior median", loc="left")
+    multi = steps["n_answers"] >= 2
+    axes[1].scatter(steps.loc[~multi, "x"] / 1000, steps.loc[~multi, "y"] / 1000, s=5,
+                    color=CONTEXT, lw=0, rasterized=True)  # fmt: skip
+    axes[1].scatter(steps.loc[multi, "x"] / 1000, steps.loc[multi, "y"] / 1000, s=10,
+                    color=two_c, lw=0, rasterized=True)  # fmt: skip
+    axes[1].legend(
+        [Line2D([], [], ls="", marker="o", ms=4, color=c) for c in (CONTEXT, two_c)],
+        ["one answer", "two or more answers"], loc="lower left", fontsize=7, frameon=False,
+    )  # fmt: skip
+    axes[1].set_title(f"Where the data allow two answers ({multi.mean():.1%} of soundings)",
+                      loc="left")  # fmt: skip
+    for ax in axes:
+        _map_axes(ax, steps)
+        ax.set_xlabel("easting (km, UTM 13N)")
+    axes[0].set_ylabel("northing (km, UTM 13N)")
+    fig.suptitle("Depth to bedrock on a grid, composed exactly along every line", x=0.01,
+                 ha="left", fontsize=10)  # fmt: skip
+    fig.tight_layout(rect=(0, 0, 1, 0.98))
+    fig.savefig(path, dpi=150)
+    plt.close(fig)

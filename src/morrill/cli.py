@@ -33,6 +33,10 @@ def main(argv: list[str] | None = None) -> int:
         help="invert for the depth to bedrock directly (run enki first; needs the extra)",
     )
     sub.add_parser(
+        "profunctor",
+        help="depth to bedrock on a grid, composed exactly along each line (run bedrock first)",
+    )
+    sub.add_parser(
         "aquifer",
         help="aquifer thickness and volume from the depth to bedrock (run bedrock first)",
     )
@@ -43,9 +47,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "build":
         build.build()
         return 0
-    if args.command in ("communities", "lithology", "kalman", "enki", "bedrock", "aquifer"):
+    commands = ("communities", "lithology", "kalman", "enki", "bedrock", "profunctor", "aquifer")
+    if args.command in commands:
         try:
-            from morrill.analysis import aquifer, bedrock, communities, enki, kalman, lithology
+            from morrill.analysis import (
+                aquifer,
+                bedrock,
+                bedrock_profunctor,
+                communities,
+                enki,
+                kalman,
+                lithology,
+            )
         except ImportError as err:
             print(f"{err}. Install the analysis extra: uv sync --extra analysis")
             return 1
@@ -55,6 +68,7 @@ def main(argv: list[str] | None = None) -> int:
             "kalman": kalman,
             "enki": enki,
             "bedrock": bedrock,
+            "profunctor": bedrock_profunctor,
             "aquifer": aquifer,
         }[args.command]
         analysis.run(DB_PATH, DATA_DIR / "derived", REPO_ROOT / "docs" / "figures")

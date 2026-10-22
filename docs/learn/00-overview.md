@@ -74,4 +74,8 @@ helicopter EM survey ──► resistivity of the ground ──► rock type ─
 - [07 · Depth to bedrock](07-depth-to-bedrock.md): the depth to bedrock as a
   number the inversion solves for, with a sharp contact, and intervals
   recalibrated on boreholes the checks don't use.
+- [08 · The inversion as a profunctor](08-profunctor-inversion.md): the same
+  earth on a grid of depths, composed exactly along each line in two
+  semirings (probabilities and best paths). It is the most accurate so far, and
+  shows note 07's two answers were an ensemble trap.
 - More are added as each step is built.

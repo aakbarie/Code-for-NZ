@@ -1,5 +1,5 @@
 ---
-title: "Ensemble Kalman smoothing of helicopter electromagnetic data along flight lines: depth to bedrock under a buried-valley aquifer, with borehole-calibrated uncertainty"
+title: "Inverting helicopter electromagnetic data along flight lines: ensemble smoothing, exact composition on a depth grid, and borehole-calibrated uncertainty for a buried-valley aquifer"
 author:
   - Akbar Esfahani
 date: "Draft, October 2026"
@@ -9,13 +9,13 @@ date: "Draft, October 2026"
 
 **Target journal:** [to be chosen]
 
-**Keywords:** airborne electromagnetics; ensemble Kalman methods; Bayesian inversion; groundwater; buried valley; uncertainty quantification
+**Keywords:** airborne electromagnetics; ensemble Kalman methods; hidden Markov models; Bayesian inversion; groundwater; buried valley; uncertainty quantification
 
 # Abstract
 
-Helicopter frequency-domain electromagnetic surveys map alluvial aquifers along dense flight lines, but inverting them with uncertainty is costly: trans-dimensional Markov chain Monte Carlo needs about 200,000 forward evaluations per sounding. We combine ensemble smoother updates (ES-MDA) at each sounding with an ensemble Rauch–Tung–Striebel smoother along each line, linked by a Gaussian-process prior. Priors come from held-out borehole logs, hyperparameters from the marginal likelihood. Applied to 3,577 soundings of a 2008 survey of the North Platte River valley, Nebraska, the method needs 1,600–4,800 forward evaluations and 0.44–0.67 core-seconds per sounding, and is checked against 21 other boreholes.
+Helicopter frequency-domain electromagnetic surveys map alluvial aquifers along dense flight lines, but inverting them with uncertainty is costly: trans-dimensional Markov chain Monte Carlo needs about 200,000 forward evaluations per sounding. We invert a 2008 survey of the North Platte River valley, Nebraska, along each flight line in two ways. The first is an ensemble Kalman smoother. The second treats the inversion as a weighted relation rather than a function and composes it exactly on a grid of depths to bedrock, integrating the other parameters out at each depth. Both use priors from held-out borehole logs and are checked against 21 other boreholes, at 0.36–0.67 core-seconds per sounding.
 
-The forward model reproduces an independent inversion's data to 1–5% on nine of twelve channels, and exposes a 10–12% calibration error on three. Where bedrock is shallow, a smooth layered model beats the existing deterministic inversion (1.7 m against 2.1 m mean error), with 9 of 10 holes inside its 80% intervals. It places the floor of a buried paleovalley 17–24 m too high. Inverting for the depth to bedrock as a sharp contact cuts that error from 21 to 13 m. Where the top of bedrock is not an electrical contrast, the data allow two answers; one ensemble returns one at random, and even three pooled starts put only 29% of borehole depths inside their intervals. Split-conformal recalibration on boreholes that validation never uses widens them 4.3-fold and restores 76% coverage. The choice between the two models changes the estimated volume of aquifer material by 27–37%, far more than one ensemble's stated uncertainty.
+A new forward model exposes a 10–12% calibration error on three channels, confirmed by two independent inversions. A smooth ensemble beats the existing deterministic inversion where bedrock is shallow (1.7 m against 2.1 m mean error) but places a buried valley floor 17–24 m too high. Inverting for a sharp contact helps in the valley, but the Gaussian ensemble settles on deep contacts the data do not support, and its seed decides where. Exact composition on the grid removes this failure, reducing the mean error at the 21 holes to 3.7 m, against 5.9 m for the ensemble. Exact inference does not make intervals honest: they hold only 14% of borehole depths, because the model is wrong. Split-conformal recalibration on boreholes that validation never uses restores 76% coverage. With exact inference, the choice of parameterization changes the volume of aquifer material by 10%.
 
 # 1 Introduction
 
@@ -36,7 +36,7 @@ Markov chain Monte Carlo (MCMC; Malinverno 2002; Minsley 2011; Minsley et al.
 2021) samples models whose number of layers is itself unknown, and so describes
 non-uniqueness directly. The price is computation. With the 2012 version of one
 such code, a single test sounding took about 200,000 forward-model evaluations
-and 24 minutes (section 4.7). A survey of 70,000 soundings would need years of
+and 24 minutes (section 4.8). A survey of 70,000 soundings would need years of
 single-core time.
 
 Ensemble Kalman methods sit between the two. Developed for data assimilation
@@ -61,7 +61,7 @@ machine-learning model on the inverted profiles, and let it predict resistivity
 everywhere else in near real time. A model trained to reproduce an inversion,
 however, inherits the inversion's limitations. It can be no better than its
 training labels, and its uncertainty describes how well the inversion was
-copied, not how well the ground is known (section 4.6).
+copied, not how well the ground is known (section 4.7).
 
 This paper is a case study that combines these pieces and tests them against
 boreholes. The physics is kept and made cheap with statistics: an ensemble
@@ -80,10 +80,16 @@ prior. Relative to the work above, the paper adds:
    depth to bedrock share the same data, forward model, filter and error
    model. The comparison isolates how much the question asked moves the floor
    of a resistive buried valley.
-3. **A test of interval calibration against held-out boreholes,** and a
+3. **Exact composition on a depth grid.** The inversion is treated as what it
+   is, a weighted relation between data and earths rather than a function,
+   and composed along each line exactly on a grid of depths. In probabilities
+   this is the forward-backward algorithm; in costs it is dynamic programming
+   (Viterbi 1967; Aji & McEliece 2000). It removes a failure of the Gaussian
+   ensemble update that no setting fixed.
+4. **A test of interval calibration against held-out boreholes,** and a
    split-conformal recalibration (Vovk et al. 2005) for intervals that turn out
    too narrow.
-4. **Results for this survey:** a calibration error on three channels,
+5. **Results for this survey:** a calibration error on three channels,
    identified by two independent inversions; an inversion, with uncertainty, of
    the four lines that were never inverted; and the effect of the choice of
    inversion on the volume of aquifer material.
@@ -207,7 +213,7 @@ is applied $N_a = 4$ times with the data covariance inflated by $\alpha = N_a$. 
 - Every 20th sounding is used (about 64 m apart, roughly one footprint).
 - Soundings flown above 60 m are forecast but not updated (1.3% of the survey).
 - The ensemble has $N = 400$ members.
-- For the sharp model, each line is inverted from three independent starts, and their members are pooled into one equal-weight mixture of 1,200 members. A single Gaussian ensemble keeps only one of several modes, and which one depends on its random draws; pooled restarts can keep more than one (section 4.3). The mixture's marginal likelihood is the mean of the starts' likelihoods. The settings search uses a single start.
+- For the sharp model, each line is inverted from three independent starts, and their members are pooled into one equal-weight mixture of 1,200 members. A single Gaussian ensemble keeps only one of several modes, and which one depends on its random draws; pooled restarts can keep more than one (but see section 4.4). The mixture's marginal likelihood is the mean of the starts' likelihoods. The settings search uses a single start.
 
 Two tests fix the implementation:
 1. For a linear observation operator, ES-MDA reproduces the analytical Gaussian posterior.
@@ -219,7 +225,7 @@ A "sounding-by-sounding" mode, in which every sounding starts from the same prio
 
 **Hyperparameters.** The along-line correlation length $L_h$, the widening of the prior spreads, and (smooth model) the whole-profile share $c$ are chosen by maximum marginal likelihood. The ensemble filter evaluates $\log p(d_t \mid d_{1:t-1})$ at each sounding from the forecast ensemble, and these are summed along the line. The search uses line 30050, which has no borehole within 100 m, so it cannot draw on validation data. Because line 30050 crosses mostly shallow bedrock, the sharp model's search was repeated with the marginal likelihood summed over all 12 lines, which also uses no borehole; it chose the same settings.
 
-The relative data error is not chosen this way. The likelihood treats soundings as conditionally independent, so it rewards ever smaller errors and cannot see model errors that repeat from sounding to sounding: the 1D assumption, calibration, and the difference in support between a borehole log and the bird's footprint. The relative error is therefore fixed at 5%, the level at which the independent EM1DFM models miss the data on most channels (section 4.1). The sensitivity to that choice is reported in section 4.5.
+The relative data error is not chosen this way. The likelihood treats soundings as conditionally independent, so it rewards ever smaller errors and cannot see model errors that repeat from sounding to sounding: the 1D assumption, calibration, and the difference in support between a borehole log and the bird's footprint. The relative error is therefore fixed at 5%, the level at which the independent EM1DFM models miss the data on most channels (section 4.1). The sensitivity to that choice is reported in section 4.6.
 
 **Calibration.** Systematic misfit in three channels (section 4.1) motivated one survey-wide gain per channel, estimated as the median ratio of measured to predicted data after an inversion of line 30050. A gain common to all channels is indistinguishable from a change in bird height, so the geometric mean of the gains is fixed at 1.
 
@@ -246,7 +252,27 @@ measures how far the logged depth $\ell = \log_{10} z$ lies from the median, in 
 
 **Aquifer material.** Each member of the smoothed sharp-model ensemble is a coherent surface along its line, because the smoother updates whole members. The thickness from the ground to bedrock, integrated over the strip of ground each north–south line stands for (half the distance to each neighbouring line, so the strips cover the ground between the outermost lines), gives a volume per member. Lines are inverted independently, so members of different lines combine freely. The same volume follows from the medians of the smooth model and EM1DFM, with "no conductor" counted at the 125 m base of those models.
 
-**Cost.** Run time is compared with the trans-dimensional MCMC code of Minsley (2011) as it existed in 2012, with a run log recorded then and benchmarks rerun here in GNU Octave 8.4 (section 4.7 and Supplement S1).
+**Cost.** Run time is compared with the trans-dimensional MCMC code of Minsley (2011) as it existed in 2012, with a run log recorded then and benchmarks rerun here in GNU Octave 8.4 (section 4.8 and Supplement S1).
+
+## 3.6 Exact composition on a depth grid
+
+**The inversion as a relation.** A forward model maps one earth to one set of data, but many earths fit the same data, so the inversion is a weighted relation between the two spaces: in categorical terms a profunctor, of which Bayesian inversion of Markov kernels is a special case (Cho & Jacobs 2019; Fritz 2020). On grids, such a relation is an array, and two of them compose through a shared space as
+
+$$(Q \circ P)[a, c] = \bigoplus_b P[a, b] \otimes Q[b, c],$$
+
+for a semiring $(\oplus, \otimes)$. With log-sum-exp and addition on log-probabilities, composition along a line is the forward-backward algorithm (Rabiner 1989), whose linear-Gaussian case is the Kalman filter and RTS smoother. With max and addition, it is dynamic programming, which gives the single most probable sequence (Viterbi 1967). Both are instances of the generalized distributive law (Aji & McEliece 2000). On a grid neither assumes a Gaussian posterior.
+
+**What goes on the grid.** A grid represents a posterior faithfully only if its spacing is finer than the posterior's width. At typical Morrill earths the Fisher information gives posterior standard deviations of 0.02–0.2 decades for the resistivities, 0.04–0.06 decades for $\log_{10} z_b$, and 0.4–1 m for the height correction. So only $z_b$ is placed on a grid: 80 values from 1 to 150 m, 0.027 decades apart. The other seven numbers $\psi$ of the sharp-contact model are integrated out at every grid depth of every sounding,
+
+$$L_t(z) = \int p(d_t \mid z, \psi)\, p(\psi)\, d\psi,$$
+
+itself a composition through the space of $\psi$. The integral uses a Laplace approximation (Tierney & Kadane 1986) around a Levenberg–Marquardt fit. Each fit starts from the same depth at the previous sounding, and every tenth sounding it is repeated from the prior mean, keeping the better of the two. The earth and prior are those of section 3.2, so the grid and the ensemble share one Bayesian model. The differences are the Laplace step and that $\psi$ is not coupled along the line.
+
+**Along the line.** The AR(1) prior on $\log_{10} z_b$ becomes a kernel between neighbouring grids. A Metropolis–Hastings correction (Hastings 1970) of the discretized Gaussian conditional keeps the grid prior exactly invariant. Composing in the two semirings gives the posterior at every sounding and the most probable surface. Sampling backwards through the forward messages (Carter & Kohn 1994) gives exact joint draws of whole surfaces for the aquifer volume.
+
+**Settings for free.** $L_t(z)$ depends neither on $L_h$ nor on the width of the depth prior. Both are therefore chosen by the evidence summed over all 12 lines, which needs only the composition, not new fits.
+
+**Tests.** For a linear forward model the Laplace step is exact. For a linear-Gaussian line the grid posterior matches the exact Kalman smoother to 0.01 in mean and standard deviation. On short lines both semirings match brute force over every path, and composition is associative with an identity.
 
 # 4 Results
 
@@ -313,7 +339,7 @@ The scores of the leading settings are close (log marginal likelihoods −18,767
 
 **Prior and settings.** The depth prior, from the 78 held-out holes that reached bedrock, has a median of 6.1 m and a spread of 0.43 decades. Fill and bedrock resistivity, from logs above and below the logged contact (8 holes), are about 39 and 14 ohm·m. The marginal likelihood on line 30050 chose $L_h = 3$ km, resistivity spreads widened by 1.5, and an unwidened depth prior. Summed over all 12 lines it chose the same, and widening the depth prior lowered the likelihood for every combination. Across all 12 settings, the medians at the two valley holes stayed between 44 and 49 m: the shallow-centred prior is not what limits the valley floor.
 
-**One ensemble keeps one answer.** With a single start, the result on some stretches of line depends on the random seed (Table 3). In three single-start runs, the two valley holes stayed at 45.5–49.3 m. On line 30090, though, four shallow Brule holes (bedrock at 0.6–4.6 m) came out at 8–18 m in two runs and at 2.4–4.4 m in the third. All three runs fit the data equally well (median misfit 0.29–0.31). The data there allow two answers: a shallow contact under resistive cover, or a deeper one under fill of about 20 ohm·m on rock of 5–7 ohm·m. This is the depth–resistivity trade-off of the synthetic test. A Gaussian update can hold only one mode, and the seed decides which. The final runs therefore pool three independent starts per line (section 3.3).
+**One ensemble keeps one answer.** With a single start, the result on some stretches of line depends on the random seed (Table 3). In three single-start runs, the two valley holes stayed at 45.5–49.3 m. On line 30090, though, four shallow Brule holes (bedrock at 0.6–4.6 m) came out at 8–18 m in two runs and at 2.4–4.4 m in the third. All three runs fit the data equally well (median misfit 0.29–0.31). The ensemble can settle on a shallow contact under resistive cover, or on a deeper one under fill of about 20 ohm·m on rock of 5–7 ohm·m. This is the depth–resistivity trade-off of the synthetic test, and the seed decides where it settles. The final ensemble runs pool three independent starts per line (section 3.3). Section 4.4 shows that the deep contact is not supported by the data.
 
 **Table 3.** Sharp-contact model, single starts with different seeds and the pooled run, against the 21 validation holes.
 
@@ -337,37 +363,58 @@ The scores of the leading settings are close (log marginal likelihoods −18,767
 | Buried valley | 2 | 12.7 m | 0 of 2 | 2 of 2 | 20.7 m |
 | All | 21 | 5.9 m | 29% | 76% | 5.2 m |
 
-**Two meanings of bedrock.** The two answers on line 30090 come from a model with only two units. For the driller, bedrock is a formation, the top of the Brule; for the EM it is a conductor. The ground there probably has three units: a resistive cover, a moderately conductive upper Brule, and a more conductive layer below. A two-unit model must place its single contact at one of the two interfaces, and both fit the data.
-
 **Interval calibration.** Even pooled, the intervals are far too narrow: only 6 of 21 validation holes, and 3 of the 15 calibration holes, lie inside them. The split-conformal factor from the calibration holes is $k = 4.32$. After stretching, 76% of validation holes (16 of 21) lie inside, within sampling error of the 80% target for 21 holes (±9%). Across the single-start runs, $k$ ranged from 2.6 to 4.4 and the recalibrated coverage from 57% to 76%. The price is width: at the valley holes the recalibrated intervals run from about 30 to 75 m (Fig. 3).
 
 ![Fig. 3. Line 30070, sharp-contact model: the median contact over the smooth model's resistivity; the contact's 80% interval before and after recalibration, the smooth model's threshold depth and the boreholes; data misfit.](../figures/bedrock_line.png)
 
 ![Fig. 4. Depth to bedrock from the sharp-contact model on every line, and the width of its 80% interval before recalibration.](../figures/bedrock_depth.png)
 
-## 4.4 Consequence for the volume of aquifer material
+## 4.4 Exact composition on a depth grid
 
-Integrated over the ten north–south lines' strips (about 45 km²), the inversions give different amounts of aquifer material between the ground and bedrock (Table 5, Fig. 5). The pooled sharp contact gives 27% more than the smooth model, and the single-start run 37% more. On the six lines EM1DFM covers, EM1DFM agrees with the sharp contact, and the smooth model is 16% lower. Which mode the ensemble settles on also matters: the single-start and pooled runs differ by 0.11 km³, and two lines' mean thickness moved by 7–8 m between them. A single ensemble's posterior spread (±1.2%) shows none of this; the pooled ensemble's (−3% to +9%) shows some.
+**Settings.** One pass of per-sounding fits took 5.4 min on four cores (0.36 core-seconds per sounding). The evidence summed over all lines then ranked 15 combinations of $L_h$ and depth-prior width in seconds. The best three (24 km with the depth spread widened 1.5-fold, 12 km unwidened, 6 km narrowed to 0.75) lie within 19 log-units of each other. All three allow a change of about 0.05 decades in $\log_{10} z_b$ between soundings 64 m apart. The data constrain that increment, not $L_h$ itself. Note 07's choice, 3 km, scores 300 log-units lower. The top setting is used.
 
-**Table 5.** Volume of aquifer material under the ten lines' strips.
+**The deep contact was a trap.** At the four shallow Brule holes of line 30090, where the ensembles returned 12–18 m, the grid posterior medians are 2.9–4.2 m (bedrock at 0.6–4.6 m; Fig. 5). The probability that $z_b$ exceeds 8 m is $10^{-5}$ or less at each. The deep contact is not a second answer in the data. It is a place where the Gaussian update can settle and from which it cannot leave. Only 7 of 3,577 soundings (0.2%) have posteriors with two separate modes, none at a validation hole (Fig. 6).
+
+**Against the boreholes** (Table 5). The grid is the most accurate inversion here. Where bedrock is shallow it beats EM1DFM (1.5 m against 2.1 m), and on the uninverted lines it cuts the error by a third. At the two valley holes it does worse than the pooled ensemble. 1-H-97, 91 m from its sounding, comes out at 38 m [34–43] against the ensemble's 47 m; at 2-J-97 both give 47 m. At 1-J-96 (59.7 m), a calibration hole, the grid gives 55 m [48–63]. The median misfit at the most probable surface is 0.21, against 0.31 for the ensemble.
+
+**Table 5.** Depth to bedrock against the 21 validation holes: mean absolute error, by inversion.
+
+| Holes | n | Grid | Ensemble, pooled | Smooth model | EM1DFM |
+|---|---|---|---|---|---|
+| Inverted lines | 10 | **1.5 m** | 2.6 m | 1.7 m | 2.1 m |
+| Uninverted lines | 11 | **5.7 m** | 8.9 m | 8.4 m | — |
+| Buried valley | 2 | 17.0 m | **12.7 m** | 20.7 m | — |
+| All | 21 | **3.7 m** | 5.9 m | 5.2 m | — |
+
+**Exact inference, overconfident intervals.** The errors halve in log depth (rms 0.23 decades, against 0.43 for the ensemble), but the intervals narrow as well (typical half-width 0.06 decades). Only 3 of 21 validation holes, and 4 of the 15 calibration holes, lie inside the 80% intervals. With the split-conformal factor $k = 4.08$, 16 of 21 (76%) do. The comparison separates two failures. The ensemble's trap is a failure of inference, which exact composition removes. The overconfidence is a failure of the model: a one-dimensional, two-unit earth, nuisance parameters uncoupled along the line, and a borehole that samples a point where the bird averages about 100 m. Exact inference cannot remove that, because its posterior is exact for the wrong model.
+
+![Fig. 5. Lines 30090 and 30070: the grid posterior of the depth to bedrock at every sounding (darker is more probable), the most probable surface, the pooled ensemble's 80% interval, and the boreholes.](../figures/profunctor_lines.png)
+
+![Fig. 6. Depth to bedrock from the grid on every line, and the soundings whose posterior holds two separate modes.](../figures/profunctor_map.png)
+
+## 4.5 Consequence for the volume of aquifer material
+
+Integrated over the ten north–south lines' strips (about 45 km²), the inversions give different amounts of aquifer material between the ground and bedrock (Table 6, Fig. 7). With exact inference the sharp contact gives 10% more than the smooth model (1.22 against 1.11 km³). The ensembles gave 27–37% more, but most of that surplus came from contacts trapped too deep under shallow bedrock: the mean thickness on line 30090 falls from 38 m (pooled ensemble) to 29 m (grid). On the six lines EM1DFM covers, the grid lies between the smooth model and EM1DFM. The 10% difference between the smooth and sharp models is still several times any single run's posterior spread (±1% for the grid).
+
+**Table 6.** Volume of aquifer material under the ten lines' strips.
 
 | | Volume (km³) |
 |---|---|
 | Smooth model (first layer under 20 ohm·m) | 1.11 |
-| Sharp contact, single start: median (80%) | 1.52 (1.52–1.56) |
-| Sharp contact, pooled: median (80%) | 1.41 (1.38–1.54) |
-| Sharp contact, pooled and recalibrated: 80% | 1.50–2.20 |
-| EM1DFM's six lines only: smooth / EM1DFM / pooled sharp | 0.72 / 0.86 / 0.86 |
+| Grid, sharp contact: median (80%) | 1.22 (1.22–1.24) |
+| Grid, recalibrated: 80% | 1.30–1.36 |
+| Ensemble, sharp contact: pooled / single start | 1.41 / 1.52 |
+| EM1DFM's six lines only: smooth / EM1DFM / grid | 0.72 / 0.86 / 0.77 |
 
 The recalibrated range lies above the raw one. Stretching each surface in log depth raises the average thickness, since a multiplicative spread about a median has a mean above it. The range also assumes that the structural error runs coherently along each line. Neither assumption can be checked with 36 boreholes, so the recalibrated volume is an indication, not a calibrated interval.
 
-![Fig. 5. Mean thickness from the ground to bedrock on each line, by inversion.](../figures/aquifer_thickness.png)
+![Fig. 7. Mean thickness from the ground to bedrock on each line, from the grid, the smooth model and EM1DFM.](../figures/aquifer_thickness_profunctor.png)
 
-## 4.5 Sensitivity to the data error
+## 4.6 Sensitivity to the data error
 
-The marginal likelihood prefers ever smaller relative data errors, down to the channel floors: 1% scores −17,727 on line 30050, against −18,767 for 5%. At 1% the data are still fitted to within the error (median misfit 0.82), so the measurement noise is indeed small. The errors that matter are of another kind: the earth is not one-dimensional, the calibration is imperfect, and the bird averages over about 100 m where a log averages over a metre. All three repeat from one sounding to the next, which a likelihood that treats soundings as independent cannot see. Table 6 shows the trade-off for the smooth model.
+The marginal likelihood prefers ever smaller relative data errors, down to the channel floors: 1% scores −17,727 on line 30050, against −18,767 for 5%. At 1% the data are still fitted to within the error (median misfit 0.82), so the measurement noise is indeed small. The errors that matter are of another kind: the earth is not one-dimensional, the calibration is imperfect, and the bird averages over about 100 m where a log averages over a metre. All three repeat from one sounding to the next, which a likelihood that treats soundings as independent cannot see. Table 7 shows the trade-off for the smooth model.
 
-**Table 6.** Smooth model at 1% and 5% relative data error, scored against boreholes and logs.
+**Table 7.** Smooth model at 1% and 5% relative data error, scored against boreholes and logs.
 
 | Data error | Depth error, inverted lines | Inside 80%, inverted lines | Inside 80%, uninverted lines | Logs: rank correlation, inside 80% |
 |---|---|---|---|---|
@@ -376,7 +423,7 @@ The marginal likelihood prefers ever smaller relative data errors, down to the c
 
 Neither setting is better everywhere: 5% is better on the inverted lines and the logs, and worse on the uninverted lines. Neither finds the valley floor.
 
-## 4.6 A learned surrogate as a baseline
+## 4.7 A learned surrogate as a baseline
 
 To test the premise of the hybrid approach, a gradient-boosting model (Friedman 2001) was trained to reproduce EM1DFM's depth to conductor from the measured channels and bird height. This is a stand-in in the spirit of Friedel et al. (2015), not a replication of their method. Two kinds of input were compared: the raw channels, and four along-line features from a linear state-space model fitted by expectation–maximization (Shumway & Stoffer 1982), with bird height as an explicit input.
 
@@ -389,19 +436,19 @@ To test the premise of the hybrid approach, a gradient-boosting model (Friedman 
 
 The 80% intervals from the state-space features contained the borehole depth at none of the 12 holes on those lines. They describe how well the inversion was copied, not how well the ground is known. The surrogate's mean error on the 11 uninverted-line holes of Table 2 (6.8–6.9 m) is lower than the smooth ensemble's (8.4 m), mostly because of two holes (1-G-96 and 2-G-96) where the ensemble finds conductive ground near the surface and the driller logged silt. What the ensemble adds is intervals that sometimes contain the truth.
 
-## 4.7 Cost against MCMC
+## 4.8 Cost against MCMC
 
 **The 2012 benchmark.** The trans-dimensional MCMC code of Minsley (2011), as configured in 2012, left a run log for a test sounding from an Alaskan survey, recorded on 11 July 2012. The settings were up to 30 layers between 2 and 150 m, a smoothness prior on the change in log resistivity between layers, and a relative data error solved for, with bird height and calibration held fixed. The chain counts as burned in at the first accepted model whose misfit reaches the target, and then runs 100,000 further iterations. The log records 99,681 burn-in iterations, so the sounding took about 200,000 forward evaluations and 1,425 s (about 7 ms per iteration).
 
-**Table 7.** Cost per sounding, and for the survey, against the 2012 MCMC run.
+**Table 8.** Cost per sounding, and for the survey, against the 2012 MCMC run.
 
-| | MCMC (logged run, 2012) | Smooth ensemble | Sharp-contact ensemble |
-|---|---|---|---|
-| Forward evaluations per sounding | about 200,000 | 1,600 (400 × 4) | 4,800 (3 starts × 400 × 4) |
-| Time per sounding | 1,425 s | 0.67 core-s | 0.44 core-s |
-| All 71,470 soundings | about 3.2 years on one core | about 13 core-hours | about 9 core-hours |
+| | MCMC (logged run, 2012) | Smooth ensemble | Sharp-contact ensemble | Depth grid |
+|---|---|---|---|---|
+| Forward evaluations per sounding | about 200,000 | 1,600 (400 × 4) | 4,800 (3 starts × 400 × 4) | about 4,000 (80 depths × Laplace fits) |
+| Time per sounding | 1,425 s | 0.67 core-s | 0.44 core-s | 0.36 core-s |
+| All 71,470 soundings | about 3.2 years on one core | about 13 core-hours | about 9 core-hours | about 7 core-hours |
 
-The ensembles use 40–125 times fewer forward evaluations. In wall time the gap is about 2,100 times for the smooth model and 3,200 times for the pooled sharp model, but part of that is the machine and language: the 2012 run was in MATLAB with live plotting enabled. A modern, parallel MCMC would close some of the wall-time gap, though not the gap in forward evaluations.
+The ensembles and the grid use 40–125 times fewer forward evaluations. In wall time the gap is 2,100–4,000 times, but part of that is the machine and language: the 2012 run was in MATLAB with live plotting enabled. A modern, parallel MCMC would close some of the wall-time gap, though not the gap in forward evaluations.
 
 **The 2012 modifications.** Two changes the author made to the MCMC code in 2012, vectorization of the code base and a burn-in stopped on detection, are measured in Supplement S1. Together they cut the time per sounding by about 32%, which does not change the comparison above.
 
@@ -409,19 +456,21 @@ The ensembles use 40–125 times fewer forward evaluations. In wall time the gap
 
 **Borrowing along the line is what makes the ensemble method work.** Run sounding by sounding from a broad prior, ES-MDA cannot fit the data: the median misfit stays at 2.0–2.3 whether it takes 4, 8 or 16 steps. The ensemble update is Gaussian. It can shift and stretch a cloud of models, but from a broad start the cloud spans models whose responses differ nonlinearly, and a linear step cannot reach the answer. Along the line, each sounding starts from its neighbour's posterior, so each update is small and nearly linear. The along-line prior is therefore not just a smoothness preference; it is what keeps the Kalman update in its linear regime. It also improves accuracy where it can be checked (Table 2: 1.7 m against 2.7 m on the inverted lines). The cost is that sharp lateral changes are smoothed at the scale of $L_h$, and the method needs flight lines dense enough for neighbours to resemble each other.
 
-**What is inverted for matters more than how.** The smooth and sharp models use the same data, forward model, filter, smoother, gains and error model. They differ only in the question asked, and they place the valley floor about 10 m apart (section 4.3). A smooth Gaussian prior cannot represent a step, so a threshold on a smooth model fires early on the ramp above it. Asking for the depth of a contact directly removes that bias by construction. Trans-dimensional MCMC achieves something similar by letting the number and position of boundaries vary (Malinverno 2002; Minsley 2011). A fixed parameterization with an explicit contact gets much of that benefit at a small fraction of the cost, when the question is a single surface.
+**What is inverted for, and how.** The smooth and sharp ensembles use the same data, forward model, filter, smoother, gains and error model. They differ only in the question asked, and they place the valley floor about 10 m apart (section 4.3). A smooth Gaussian prior cannot represent a step, so a threshold on a smooth model fires early on the ramp above it. Asking for the depth of a contact directly removes that bias by construction. Trans-dimensional MCMC achieves something similar by letting the number and position of boundaries vary (Malinverno 2002; Minsley 2011). A fixed parameterization with an explicit contact gets much of that benefit at a small fraction of the cost, when the question is a single surface. How the inversion is done matters too. The sharp-contact ensemble and the depth grid share one Bayesian model, yet the grid cuts the mean error from 5.9 to 3.7 m, because the ensemble's Gaussian update settles in places the data do not support (section 4.4).
 
-**Which bedrock is being mapped.** Neither parameterization is better everywhere. Where the Brule is shallow and electrically distinct, the smooth model's threshold and the borehole contact coincide, and the smooth model is the more accurate. In the buried valley the sharp contact is. On line 30090 the two-unit model has two answers that fit equally well, because the driller's bedrock (a formation) and the EM's bedrock (a conductor) are different surfaces, and the top of the Brule there is about as resistive as the fill. Which answer a single ensemble returns depends on its seed. An EM-derived bedrock map should say which of the two surfaces it maps. A three-unit model (fill, an electrically resistive upper bedrock, and a conductor), or lithology from boreholes along the line, could reconcile them. Because the filter evaluates the marginal likelihood at every sounding, competing parameterizations can also be compared along the line, and averaged where neither dominates.
+**Exact composition, and what the relational view buys.** Writing the inversion as a relation and composing it along the line does not add information; it removes an approximation. The forward-backward and Viterbi recursions are classical, and their grid form is practical here because only one number per sounding, the depth to bedrock, needs a grid; the other seven are integrated out at each depth. Three things follow. The posterior can take any shape, so a trap like that of the ensemble cannot occur. The two semirings give the probabilities and the most probable surface from the same code. And because the per-sounding evidence does not depend on how soundings are linked, the linking can be chosen by evidence at negligible cost. The same composition extends naturally to the next steps: across lines, to boreholes as a second set of observations, and along the chain from earth to lithology, hydraulic conductivity and heads.
 
-The remaining valley shortfall, 12–14 m at the two validation holes, is set neither by the prior, which moved the valley medians by less than a metre when widened, nor by the seed (45.5–49.3 m in every run). Three explanations remain and cannot be separated with these data. The 1D assumption ignores the valley walls inside a footprint about 100 m wide. One of the holes is 91 m from its sounding. And 60 m under conductive fill is near the limit of the lowest frequency.
+**Which bedrock is being mapped.** The smooth model's threshold and the sharp contact are different surfaces. Where the top of the Brule is resistive, the 20 ohm·m threshold fires near the surface and happens to agree with the driller. In the buried valley the threshold fires early on the ramp above the shale, and the sharp contact is better. An EM-derived bedrock map should say which surface it maps.
 
-**Why it matters for groundwater.** The volume of aquifer material under the survey lines differs by 27–37% between the smooth and sharp models, while a single ensemble's posterior claims about ±1%. Storage and transmissivity scale with saturated thickness, so the same discrepancy carries into any groundwater budget built on one inversion with its stated uncertainty. Propagating the base of the aquifer into a flow model, together with the spatial continuity of the aquifer material (Friedel & Iwashita 2013), needs water levels, hydraulic properties and the river and canal boundaries, which are outside this study. What the results here show is that the structural choice in the inversion, not the posterior spread within one model, dominates the uncertainty such a model would inherit.
+The remaining valley shortfall, 12–22 m at the two validation holes, is set neither by the prior, which moved the ensemble's valley medians by less than a metre when widened, nor by the seed (45.5–49.3 m in every run), nor by the inference (the grid gives 38–47 m). Three explanations remain and cannot be separated with these data. The 1D assumption ignores the valley walls inside a footprint about 100 m wide. One of the holes is 91 m from its sounding. And 60 m under conductive fill is near the limit of the lowest frequency.
 
-**The intervals are conditional on the model.** A posterior describes uncertainty given its model: the parameterization, the one-dimensional earth, and the error model. When the model is close to right, as for the smooth model at shallow-bedrock holes, the intervals are honest (90% coverage). When it is rigid and sometimes wrong, as for the two-unit model where the stratigraphic contact is not the electrical one, they are far too narrow. Two things compound it. A Gaussian ensemble keeps one mode where the data allow two, and pooling three starts recovers only part of the missing spread (29% coverage instead of 10%). And the likelihood cannot detect structural error, because it repeats from sounding to sounding and the along-line coupling then accumulates false confidence. The split-conformal step used here (Vovk et al. 2005; Angelopoulos & Bates 2023) is a cheap guard. It uses boreholes that are neither in the prior's validation set nor near enough to be used for validation, and it makes no assumption about why the model is wrong. Its guarantee rests on the calibration and validation holes being exchangeable. They are not quite: calibration holes lie 100–300 m from the nearest sounding, validation holes within 100 m, so the recalibrated intervals should err on the wide side.
+**Why it matters for groundwater.** With exact inference, the volume of aquifer material under the survey lines differs by 10% between the smooth and sharp models, while each run's posterior claims about ±1%. An approximate inference can make the gap look three times larger (section 4.5). Storage and transmissivity scale with saturated thickness, so the same discrepancy carries into any groundwater budget built on one inversion with its stated uncertainty. Propagating the base of the aquifer into a flow model, together with the spatial continuity of the aquifer material (Friedel & Iwashita 2013), needs water levels, hydraulic properties and the river and canal boundaries, which are outside this study. What the results here show is that the structural choice in the inversion, not the posterior spread within one model, dominates the uncertainty such a model would inherit.
+
+**The intervals are conditional on the model.** A posterior describes uncertainty given its model: the parameterization, the one-dimensional earth, and the error model. When the model is close to right, as for the smooth model at shallow-bedrock holes, the intervals are honest (90% coverage). When it is rigid and sometimes wrong, as for the two-unit model where the stratigraphic contact is not the electrical one, they are far too narrow. Exact inference on the grid does not help: its intervals hold 14% of the validation holes. The likelihood cannot detect structural error, because it repeats from sounding to sounding, and the along-line coupling then accumulates false confidence. The split-conformal step used here (Vovk et al. 2005; Angelopoulos & Bates 2023) is a cheap guard. It uses boreholes that are neither in the prior's validation set nor near enough to be used for validation, and it makes no assumption about why the model is wrong. Its guarantee rests on the calibration and validation holes being exchangeable. They are not quite: calibration holes lie 100–300 m from the nearest sounding, validation holes within 100 m, so the recalibrated intervals should err on the wide side.
 
 **A calibration error in the survey data.** Two inversions of different design, one deterministic and one Bayesian, cannot fit the coaxial channels or the 8,171 Hz in-phase, and they miss them in the same direction by the same amount. The coaxial channels read about 12% high and the 8,171 Hz in-phase about 10% low, relative to the other channels. Survey-wide gains are a simple correction, but they cannot distinguish a calibration error from a systematic departure from the one-dimensional earth, and two of the gains (378 Hz in-phase, 129 kHz) are not identifiable from bird height and deep conductivity. The survey should be recalibrated, or its calibration records checked, before further quantitative use.
 
-**Cost, and what it buys.** At 0.44–0.67 core-seconds per sounding, the whole survey can be inverted at every sounding in 9–13 core-hours. That makes it practical to re-invert as new boreholes arrive, to try alternative parameterizations, and to choose hyperparameters by marginal likelihood rather than by hand: the near-real-time goal of Friedel et al. (2015), reached by keeping the physics rather than replacing it with a learned surrogate. The comparison with MCMC is not like for like. MCMC samples a trans-dimensional posterior per sounding, while the ensemble approximates a fixed-dimensional one along the line, and its Gaussian update can understate non-Gaussian features such as the depth–resistivity trade-off of the sharp model. The synthetic test shows that trade-off clearly: with 100 members the ensemble committed to a contact twice as deep as the truth, under a more conductive fill, that fitted the data as well. With 400 members every interval contained the truth. The field data show the same trade-off on line 30090, where it survives 400 members. Pooling more starts, or a sampler that can hold several modes, would represent it better; that is what MCMC's much larger budget buys.
+**Cost, and what it buys.** At 0.44–0.67 core-seconds per sounding, the whole survey can be inverted at every sounding in 9–13 core-hours. That makes it practical to re-invert as new boreholes arrive, to try alternative parameterizations, and to choose hyperparameters by marginal likelihood rather than by hand: the near-real-time goal of Friedel et al. (2015), reached by keeping the physics rather than replacing it with a learned surrogate. The comparison with MCMC is not like for like. MCMC samples a trans-dimensional posterior per sounding, while the ensemble approximates a fixed-dimensional one along the line, and its Gaussian update can understate non-Gaussian features such as the depth–resistivity trade-off of the sharp model. The synthetic test shows that trade-off clearly: with 100 members the ensemble committed to a contact twice as deep as the truth, under a more conductive fill, that fitted the data as well. With 400 members every interval contained the truth. On line 30090 the field data trapped ensembles of 400 members, and pooling three starts did not escape it. The depth grid did, at a cost below the pooled ensemble's.
 
 **Limitations.**
 - The earth is assumed one-dimensional at each sounding. The buried valley is a two- or three-dimensional feature, and its walls may bias a 1D depth.
@@ -433,10 +482,11 @@ The remaining valley shortfall, 12–14 m at the two validation holes, is set ne
 
 1. **An ensemble Kalman smoother along flight lines** inverts a helicopter EM survey with uncertainty at 0.44–0.67 core-seconds per sounding, with 40–125 times fewer forward evaluations than trans-dimensional MCMC. Borrowing along the line is what makes the ensemble update work at all here: from a broad prior, sounding by sounding, it cannot fit the data.
 2. **Where bedrock is shallow, the smooth model beats EM1DFM against boreholes** (1.7 m against 2.1 m mean error) with honest intervals (9 of 10 holes inside the 80% interval).
-3. **Asking for the depth to bedrock directly cuts the error at the buried valley** from 20.7 to 12.7 m, in every run. Where the top of the bedrock is not an electrical contrast, the data allow two answers, and a single Gaussian ensemble returns one of them at random.
-4. **A rigid model's intervals can be far too narrow:** 10% coverage instead of 80% with one start, 29% with three pooled. A split-conformal factor from boreholes the validation never uses (k = 4.32) restores coverage to 76%, at the price of honest, wide intervals.
-5. **The choice of inversion changes the volume of aquifer material by 27–37%,** many times more than a single ensemble's stated uncertainty.
-6. **For this survey,** the coaxial channels read about 12% high and the 8,171 Hz in-phase about 10% low. Two independent inversions agree on this, and it should be corrected before further quantitative use.
+3. **Asking for the depth to bedrock directly cuts the error at the buried valley** from 20.7 to 12.7 m with the ensemble. But a Gaussian ensemble can settle on contacts the data do not support, and which one it settles on depends on its seed.
+4. **Composing the same model exactly on a grid of depths** removes that failure. Treating the inversion as a relation rather than a function, it gives a mean error of 3.7 m at 21 held-out holes, against 5.9 m for the ensemble and 5.2 m for the smooth model, in 0.36 core-seconds per sounding. It also chooses its along-line settings by evidence at negligible cost.
+5. **Exact inference does not make intervals honest.** With one or three ensemble starts or the exact grid, the 80% intervals hold 10–29% of borehole depths, because the model, not the inference, is wrong. A split-conformal factor from boreholes the validation never uses (k ≈ 4) restores coverage to 76%.
+6. **The choice of inversion changes the volume of aquifer material by 10%** with exact inference, several times any single run's stated uncertainty. An approximate inference made the gap look three times larger.
+7. **For this survey,** the coaxial channels read about 12% high and the 8,171 Hz in-phase about 10% low. Two independent inversions agree on this, and it should be corrected before further quantitative use.
 
 # Data and code availability
 
@@ -462,6 +512,8 @@ Together, the changes cut the time per sounding by about 32%. The 2012 version a
 
 Abraham JD, Cannia JC, Bedrosian PA, Johnson MR, Ball LB, Sibray SS (2012) Airborne electromagnetic mapping of the base of aquifer in areas of western Nebraska. U.S. Geological Survey Scientific Investigations Report 2011–5219, 38 p.
 
+Aji SM, McEliece RJ (2000) The generalized distributive law. IEEE Transactions on Information Theory 46:325–343.
+
 Angelopoulos AN, Bates S (2023) Conformal prediction: a gentle introduction. Foundations and Trends in Machine Learning 16:494–591. [verify]
 
 Auken E, Christiansen AV, Jacobsen BH, Foged N, Sørensen KI (2005) Piecewise 1D laterally constrained inversion of resistivity data. Geophysical Prospecting 53:497–506. [verify author list]
@@ -469,6 +521,10 @@ Auken E, Christiansen AV, Jacobsen BH, Foged N, Sørensen KI (2005) Piecewise 1D
 Bobe C, Van De Vijver E, Keller J, Hanssens D, Van Meirvenne M, De Smedt P (2020) Probabilistic 1-D inversion of frequency-domain electromagnetic data using a Kalman ensemble generator. IEEE Transactions on Geoscience and Remote Sensing 58:3287–3297. https://doi.org/10.1109/TGRS.2019.2953004 [verify volume and pages]
 
 Brodie R, Sambridge M (2006) A holistic approach to inversion of frequency-domain airborne EM data. Geophysics 71:G301–G312.
+
+Carter CK, Kohn R (1994) On Gibbs sampling for state space models. Biometrika 81:541–553.
+
+Cho K, Jacobs B (2019) Disintegration and Bayesian inversion via string diagrams. Mathematical Structures in Computer Science 29:938–971. [verify pages]
 
 Deszcz-Pan M, Fitterman DV, Labson VF (1998) Reduction of inversion errors in helicopter EM data using auxiliary information. Exploration Geophysics 29:142–146.
 
@@ -486,7 +542,11 @@ Friedel MJ, Iwashita F (2013) Hybrid modeling of spatial continuity for applicat
 
 Friedman JH (2001) Greedy function approximation: a gradient boosting machine. Annals of Statistics 29:1189–1232.
 
+Fritz T (2020) A synthetic approach to Markov kernels, conditional independence and theorems on sufficient statistics. Advances in Mathematics 370:107239.
+
 Fugro Airborne Surveys (2008) RESOLVE survey for North Platte Resource District, North Platte River, Lodgepole Creek and Sidney Draw areas, western Nebraska. Report 08035, Fugro Airborne Surveys Corp., Mississauga, Ontario.
+
+Hastings WK (1970) Monte Carlo sampling methods using Markov chains and their applications. Biometrika 57:97–109.
 
 Iglesias MA, Law KJH, Stuart AM (2013) Ensemble Kalman methods for inverse problems. Inverse Problems 29:045001.
 
@@ -508,13 +568,19 @@ Minsley BJ, Smith BD, Hammack R, Sams JI, Veloski G (2010) Calibration and filte
 
 Raanes PN (2016) On the ensemble Rauch–Tung–Striebel smoother and its equivalence to the ensemble Kalman smoother. Quarterly Journal of the Royal Meteorological Society 142:1259–1264. [verify volume and pages]
 
+Rabiner LR (1989) A tutorial on hidden Markov models and selected applications in speech recognition. Proceedings of the IEEE 77:257–286.
+
 Rasmussen CE, Williams CKI (2006) Gaussian processes for machine learning. MIT Press, Cambridge, MA.
 
 Rauch HE, Tung F, Striebel CT (1965) Maximum likelihood estimates of linear dynamic systems. AIAA Journal 3:1445–1450.
 
 Shumway RH, Stoffer DS (1982) An approach to time series smoothing and forecasting using the EM algorithm. Journal of Time Series Analysis 3:253–264.
 
+Tierney L, Kadane JB (1986) Accurate approximations for posterior moments and marginal densities. Journal of the American Statistical Association 81:82–86.
+
 Viezzoli A, Christiansen AV, Auken E, Sørensen K (2008) Quasi-3D modeling of airborne TEM data by spatially constrained inversion. Geophysics 73:F105–F113.
+
+Viterbi AJ (1967) Error bounds for convolutional codes and an asymptotically optimum decoding algorithm. IEEE Transactions on Information Theory 13:260–269.
 
 Vovk V, Gammerman A, Shafer G (2005) Algorithmic learning in a random world. Springer, New York.
 

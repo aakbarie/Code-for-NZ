@@ -25,7 +25,7 @@ the time.
 | 3 | From resistivity to lithology, hydraulic conductivity, and a MODFLOW 6 groundwater model. Builds on the spatial-continuity approach of Friedel & Iwashita (2013): ML trend plus geostatistics on the residuals, tested on a synthetic aquifer with PEST++ pilot points | first pieces: histogram (Bayes) model of rock class from resistivity ([note 04](docs/learn/04-histogram-lithology-model.md)); volume of aquifer material from the bedrock ensemble ([note 07](docs/learn/07-depth-to-bedrock.md)); a flow model needs water levels, aquifer tests, wells, river and canal data |
 | + | Network analysis: a similarity network of soundings (small-world structure, hydrostratigraphic communities) and a travel-time flow network of the 3D aquifer (connectivity, preferential paths) | first result: UMAP + Leiden communities ([note 03](docs/learn/03-airborne-and-communities.md)) |
 | + | Kalman state-space features along flight lines: flight height removed inside the model, along-line smoothing with uncertainty, surprise scores | first result ([note 05](docs/learn/05-kalman-features.md)) |
-| 2 | Ensemble Kalman inversion: our own 1D EM forward model plus an ensemble Kalman filter and smoother along each line, with a prior learned from the borehole logs; every line inverted with uncertainty | done ([note 06](docs/learn/06-ensemble-kalman-inversion.md), [note 07](docs/learn/07-depth-to-bedrock.md)): all 12 lines in 2–10 min; beats EM1DFM at shallow-bedrock holes; inverting for the depth to bedrock halves the buried-valley error; intervals recalibrated on held-out boreholes |
+| 2 | Ensemble Kalman inversion: our own 1D EM forward model plus an ensemble Kalman filter and smoother along each line, with a prior learned from the borehole logs; every line inverted with uncertainty | done ([note 06](docs/learn/06-ensemble-kalman-inversion.md), [note 07](docs/learn/07-depth-to-bedrock.md)): all 12 lines in 2–10 min; beats EM1DFM at shallow-bedrock holes; inverting for the depth to bedrock cuts the buried-valley error; composing a depth grid exactly along each line ([note 08](docs/learn/08-profunctor-inversion.md)) gives 3.7 m mean error at 21 held-out holes; intervals recalibrated on held-out boreholes |
 
 See [docs/learn/02](docs/learn/02-continuity-connectivity-networks.md) for the
 reasoning behind Steps 3 and +.
@@ -50,6 +50,7 @@ uv run morrill lithology    # P(coarse / fine / bedrock) in every model cell, wi
 uv run morrill kalman       # Kalman state-space features along every flight line (~12 min)
 uv run morrill enki         # ensemble Kalman inversion of every line, with checks (~25 min)
 uv run morrill bedrock      # depth to bedrock as a sharp contact, with calibrated intervals (~5 min)
+uv run morrill profunctor   # depth to bedrock on a grid, composed exactly along each line (~7 min)
 uv run morrill aquifer      # thickness and volume of aquifer material, by inversion (seconds)
 ```
 
